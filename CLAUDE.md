@@ -69,11 +69,11 @@ Status key: \[ \] todo · \[\~\] in progress · \[x\] done
 
 ### Phase 0 — Setup
 
-- [ ] Create GitHub repo \+ README skeleton  
-- [ ] Python virtual environment \+ requirements.txt  
-- [ ] Confirm local Postgres works (pgAdmin) — note db name/user  
-- [ ] Create AWS account \+ an S3 bucket  
-- [ ] Get Last.fm API key (store in .env, NOT in code)  
+- [x] Create GitHub repo \+ README skeleton  
+- [x] Python virtual environment \+ requirements.txt  
+- [x] Confirm local Postgres works (pgAdmin) — db: music_charts, user: orontavor, port: 5432  
+- [x] Create AWS account \+ an S3 bucket — bucket: music-charts-pipeline-orontavor  
+- [x] Get Last.fm API key (store in .env, NOT in code)  
 - [ ] Install Docker (for Metabase later — can wait)
 
 ### Phase 1 — Thin slice (local)
@@ -129,7 +129,7 @@ Status key: \[ \] todo · \[\~\] in progress · \[x\] done
 
 ### Session notes (free text — newest at top)
 
-- (nothing yet — we're at the very start, Phase 0\)
+- 2026-06-10: Completed Phase 0 (except Docker, deferred to Phase 7). GitHub repo connected, venv + requirements.txt created, Postgres db music_charts ready, S3 bucket created, Last.fm API key in .env. Considering Snowflake (user will create account 2026-06-11 — trial ends 2026-07-11, same day as submission deadline, zero buffer). Next: Phase 1 — thin slice, fetch global chart once and load into Postgres.
 
 ### Open questions
 
