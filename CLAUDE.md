@@ -8,6 +8,7 @@ This file orients you (Claude Code) at the start of every session. Read it first
 2. As we COMPLETE things: keep the Progress log accurate (mark items done, move the [~] in-progress marker, add a short "Session notes" line).
 3. Near the END of a session, or whenever I say I'm stopping: remind me, and update the Progress log yourself before we finish — don't wait for me to remember.
 4. After finishing a meaningful piece, suggest a git commit with a clear message. These keep the project's memory in the files, so we never lose our place if the chat history resets.
+5. At the END of every session: update docs/PRESENTATION_NOTES.md with any new decisions made, hurdles encountered, and what was built. This is the user's presentation reference document.
 
 ## What this project is
 
