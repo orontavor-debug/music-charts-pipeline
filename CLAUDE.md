@@ -84,12 +84,12 @@ Status key: [ ] todo · [~] in progress · [x] done
 
 ### Phase 2 — Python fetch + clean (local)
 
-- [ ] API client (requests wrapper, timeout, retries, rate-limit pause)
-- [ ] Derive global rank from list order
-- [ ] Loop over the 5 countries (geo.getTopTracks)
-- [ ] Enrichment loop: genre per track (track.getTopTags), clean tags
-- [ ] pandas: combine global + 5 countries into the tidy table
-- [ ] Quality checks (no nulls/dupes; count matched rows after joins)
+- [x] API client (requests wrapper, timeout, retries, rate-limit pause)
+- [x] Derive global rank from list order
+- [x] Loop over the 5 countries (geo.getTopTracks)
+- [x] Enrichment loop: genre per track (track.getTopTags), clean tags
+- [x] pandas: combine global + 5 countries into the tidy table
+- [x] Quality checks (no nulls/dupes; count matched rows after joins)
 
 ### Phase 2b — MusicBrainz enrichment (STRETCH, optional)
 > Only start this AFTER Phase 2 baseline works and is committed. Highest-value upgrade
@@ -139,7 +139,7 @@ Status key: [ ] todo · [~] in progress · [x] done
 ### Session notes (free text — newest at top)
 
 - 2026-06-11: Warehouse decision settled — Postgres is primary/guaranteed; Snowflake added LATER as a second dbt target (backup + cloud bonus), trial NOT started yet (start at Phase 5, expiry must be after July 11). See "Warehouse decision" below.
-- 2026-06-11: Phase 2 in progress. Built src/lastfm.py (API client with retries, timeout, rate-limit pause) and pipeline.py skeleton (global chart only so far). Genre cleaning approach decided: KNOWN_GENRES allowlist in src/lastfm.py, pick_genre() takes the first matching tag in order, defaults to "unknown" if none match — this is intentional and correct. dbt tests plan: built-in tests only (not_null, unique, accepted_values, relationships) — no custom tests unless ahead of schedule. Next: add country loop (Step 3) to pipeline.py.
+- 2026-06-11: Phase 2 complete. pipeline.py fetches global + 5 countries, enriches with genre, runs quality checks, saves charts_clean.csv (300 rows, 50 per chart). Country ranks were 0-based — fixed to 1-based (+1). playcount/listeners null for all country rows (expected, geo endpoint doesn't return them). 79/300 rows unknown genre (expected — junk tags or no tags). Next: Phase 3 — move code into AWS Glue.
 - 2026-06-10: Completed Phase 0 (except Docker, deferred to Phase 7) and Phase 1. GitHub repo connected, venv + requirements.txt created, Postgres db music_charts ready, S3 bucket music-charts-pipeline-orontavor created, Last.fm API key in .env. fetch_global.py fetches 50 global tracks to CSV; load_to_postgres.py loads CSV into raw_global_chart table — confirmed rows visible in pgAdmin. Next: Phase 2 — add countries, genre enrichment, combine into tidy table.
 
 ### Open questions
