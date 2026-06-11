@@ -78,9 +78,9 @@ Status key: \[ \] todo · \[\~\] in progress · \[x\] done
 
 ### Phase 1 — Thin slice (local)
 
-- [ ] Python: fetch GLOBAL chart once, save to a file  
-- [ ] Load that file into Postgres by hand  
-- [ ] See the rows in Postgres (pgAdmin) — proves the path end to end
+- [x] Python: fetch GLOBAL chart once, save to a file  
+- [x] Load that file into Postgres by hand  
+- [x] See the rows in Postgres (pgAdmin) — proves the path end to end
 
 ### Phase 2 — Python fetch \+ clean (local)
 
@@ -129,7 +129,7 @@ Status key: \[ \] todo · \[\~\] in progress · \[x\] done
 
 ### Session notes (free text — newest at top)
 
-- 2026-06-10: Completed Phase 0 (except Docker, deferred to Phase 7). GitHub repo connected, venv + requirements.txt created, Postgres db music_charts ready, S3 bucket created, Last.fm API key in .env. Considering Snowflake (user will create account 2026-06-11 — trial ends 2026-07-11, same day as submission deadline, zero buffer). Next: Phase 1 — thin slice, fetch global chart once and load into Postgres.
+- 2026-06-10: Completed Phase 0 (except Docker, deferred to Phase 7) and Phase 1. GitHub repo connected, venv + requirements.txt created, Postgres db music_charts ready, S3 bucket music-charts-pipeline-orontavor created, Last.fm API key in .env. fetch_global.py fetches 50 global tracks to CSV; load_to_postgres.py loads CSV into raw_global_chart table — confirmed rows visible in pgAdmin. Considering Snowflake (user will create account 2026-06-11 — trial ends 2026-07-11, same day as submission). Next: Phase 2 — add countries, genre enrichment, combine into tidy table.
 
 ### Open questions
 
