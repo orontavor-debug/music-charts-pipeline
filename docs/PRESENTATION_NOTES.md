@@ -72,6 +72,17 @@ personal labels ("seen live", "favorites"), non-genre words. We maintain a list 
 genre names and pick the first tag that matches. If none match, default to "unknown".
 "unknown" is an intentional, documented fallback — not a bug.
 
+### Why add MusicBrainz as a second data source?
+Last.fm tells us what tracks are charting and where. MusicBrainz tells us where those
+artists are FROM. Combining the two unlocks a genuinely interesting question: which
+countries produce charting artists vs which countries consume them? Is Japan's chart
+dominated by local artists? Are Korean acts (like BTS) disproportionately popular outside
+Korea? This "origin vs consumption" angle is not possible with Last.fm data alone.
+Join key: artist MBID (present in 97% of Last.fm rows). Clean join — no fuzzy matching.
+MusicBrainz fields used: country of origin, artist type (person vs group),
+formation year, gender. All verified with 100% coverage in a pre-build sample check
+(gender is 73% — missing only for bands, which is correct behavior).
+
 ### dbt tests: built-in only
 Decision: use only the 4 built-in dbt tests (not_null, unique, accepted_values,
 relationships). These are YAML config — no SQL needed. Easy to explain in interviews.
@@ -122,6 +133,22 @@ Run automatically every time `pipeline.py` runs:
 
 ## Session log (newest first)
 
+### Session 3 — 2026-06-12
+Building Phase 2b: MusicBrainz enrichment.
+- Decision to build Phase 2b was data-driven, not assumed. Before writing any code we
+  ran two pre-flight checks:
+  1. Artist MBID coverage from Last.fm: 97% of 300 rows had a non-empty artist MBID
+     (80 out of 85 unique artists). Only 5 artists missing — those default to None.
+  2. MusicBrainz field coverage for a sample of 15 artists: country=100%, type=100%,
+     begin_year=100%, gender=73% (missing only for bands/groups — correct, not a bug).
+- Join key: artist MBID (from Last.fm) → MusicBrainz artist record.
+  Clean join — no fuzzy matching needed. "Not found" defaults to None gracefully.
+- New KPI unlocked: "country of origin vs country of consumption" — which countries
+  PRODUCE charting artists vs which IMPORT them? E.g. does Japan's chart favor
+  local artists? Are Korean artists (BTS etc.) disproportionately popular outside Korea?
+- Architecture: adding src/musicbrainz.py (second data source client) + artist_mbid
+  column to pipeline.py rows + enrich_with_artist_metadata() function.
+
 ### Session 2 — 2026-06-11
 Built Phase 2: the full pipeline.
 - Created src/lastfm.py: API client with retries, exponential backoff, rate-limit pause,
@@ -130,6 +157,10 @@ Built Phase 2: the full pipeline.
   saves charts_clean.csv (300 rows).
 - Encountered and fixed: 0-based country ranks, missing playcount field, junk genre tags.
 - Key decision: KNOWN_GENRES allowlist for genre, "unknown" as intentional fallback.
+- Added WHY comments to both files — explains non-obvious decisions for interviews.
+- Created this file (docs/PRESENTATION_NOTES.md) as a running presentation reference.
+- dbt tests plan confirmed: built-in tests only (not_null, unique, accepted_values,
+  relationships) — no custom tests unless ahead of schedule.
 
 ### Session 1 — 2026-06-10
 Built Phase 0 (setup) and Phase 1 (thin slice).

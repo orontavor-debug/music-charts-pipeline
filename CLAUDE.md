@@ -92,12 +92,13 @@ Status key: [ ] todo · [~] in progress · [x] done
 - [x] pandas: combine global + 5 countries into the tidy table
 - [x] Quality checks (no nulls/dupes; count matched rows after joins)
 
-### Phase 2b — MusicBrainz enrichment (STRETCH, optional)
-> Only start this AFTER Phase 2 baseline works and is committed. Highest-value upgrade
-> (makes the project genuinely multi-source). See Phase 2b in PROJECT_PLAN.md.
-- [ ] (stretch) MusicBrainz lookup by artist MBID -> origin country, begin year, type, gender
-- [ ] (stretch) cache lookups; respect ~1 req/sec limit; handle "no MBID/not found"
-- [ ] (stretch) extend dim_artist + add a "by country of origin" KPI
+### Phase 2b — MusicBrainz enrichment (DECIDED: DO IT — not optional)
+> Pre-assessed on 2026-06-12: 97% of rows have artist MBID; 100% country/type/begin_year
+> coverage in MusicBrainz sample of 15 artists; 73% gender (missing only for bands — expected).
+> Coverage is high enough that the "country of origin vs consumption" KPI is reliable.
+- [~] MusicBrainz lookup by artist MBID -> origin country, begin year, type, gender
+- [ ] cache lookups; respect ~1 req/sec limit; handle "no MBID/not found"
+- [ ] extend pipeline output + update dim_artist for dbt later
 
 ### Phase 3 — Move code into AWS Glue
 
@@ -140,7 +141,8 @@ Status key: [ ] todo · [~] in progress · [x] done
 ### Session notes (free text — newest at top)
 
 - 2026-06-11: Warehouse decision settled — Postgres is primary/guaranteed; Snowflake added LATER as a second dbt target (backup + cloud bonus), trial NOT started yet (start at Phase 5, expiry must be after July 11). See "Warehouse decision" below.
-- 2026-06-11: Phase 2 complete. pipeline.py fetches global + 5 countries, enriches with genre, runs quality checks, saves charts_clean.csv (300 rows, 50 per chart). Country ranks were 0-based — fixed to 1-based (+1). playcount/listeners null for all country rows (expected, geo endpoint doesn't return them). 79/300 rows unknown genre (expected — junk tags or no tags). Next: Phase 3 — move code into AWS Glue.
+- 2026-06-12: Phase 2b decided — MusicBrainz enrichment is GO (not optional). Pre-flight checks showed 97% artist MBID coverage from Last.fm; MusicBrainz sample (15 artists) had 100% country/type/begin_year, 73% gender (groups have no gender — expected). Join key: artist MBID. Will add artist_mbid column to pipeline.py, build src/musicbrainz.py client, cache results to avoid repeat lookups.
+- 2026-06-11: Phase 2 complete. pipeline.py fetches global + 5 countries, enriches with genre, runs quality checks, saves charts_clean.csv (300 rows, 50 per chart). Country ranks were 0-based — fixed to 1-based (+1). playcount/listeners null for all country rows (expected, geo endpoint doesn't return them). 79/300 rows unknown genre (expected — junk tags or no tags). Added explanatory WHY comments to both src/lastfm.py and pipeline.py. Created docs/PRESENTATION_NOTES.md as a running presentation reference — update it every session. Next: Phase 3 — move code into AWS Glue.
 - 2026-06-10: Completed Phase 0 (except Docker, deferred to Phase 7) and Phase 1. GitHub repo connected, venv + requirements.txt created, Postgres db music_charts ready, S3 bucket music-charts-pipeline-orontavor created, Last.fm API key in .env. fetch_global.py fetches 50 global tracks to CSV; load_to_postgres.py loads CSV into raw_global_chart table — confirmed rows visible in pgAdmin. Next: Phase 2 — add countries, genre enrichment, combine into tidy table.
 
 ### Open questions
