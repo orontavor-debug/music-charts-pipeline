@@ -135,11 +135,33 @@ Run automatically every time `pipeline.py` runs:
 - **50 rows per chart** — catches silent API failures
 - **No null track_name or artist_name** — core identity fields
 - **Ranks 1–50** — validates both global (derived) and country (fetched) ranks
-- **Unknown genre count** — informational; 79/300 is expected and acceptable
+- **Unknown genre count** — informational; 119/300 is expected and acceptable (see genre limitation note above)
 
 ---
 
 ## Session log (newest first)
+
+### Session 4 — 2026-06-15
+Completed Phase 2b and set up daily automation.
+- Built src/musicbrainz.py: second data source client. Respects 1.1s rate limit.
+  Retries with exponential backoff. _empty_result() fallback for missing MBIDs.
+- Added artist_mbid column to both fetch_global() and fetch_country() in pipeline.py.
+- New enrich_with_artist_metadata() function: deduplicates by artist_mbid first,
+  looks up each unique artist once, maps results back onto all 300 rows.
+- 4 new columns in output: artist_origin_country, artist_type, artist_gender, artist_begin_year.
+- Coverage: 291/300 rows have artist_origin_country. Top origins: US(27), GB(12), JP(8), KR(7).
+- Genre unknown rate settled at 119/300 after expanding KNOWN_GENRES list.
+  Investigated root cause: 80% of unknowns have ZERO tags on Last.fm — not a fixable problem.
+  Documented as a known limitation of crowd-sourced tagging for non-Western markets.
+- Hurdle: wrong hardcoded MBID in test returned wrong artist silently — no error from
+  MusicBrainz. Lesson: always use MBIDs from Last.fm directly, never guess them.
+- load_to_postgres.py rewritten to APPEND (not replace) with a duplicate guard:
+  checks if snapshot_date already exists before loading — safe to run pipeline twice.
+- First daily snapshot loaded: 2026-06-15, 300 rows in raw_chart_entries table.
+- Daily automation: cron job at 10:00am via run_pipeline.sh. Mac desktop notification
+  on success and failure. Output logged to pipeline.log (git-ignored).
+- AWS budget cap set: $20 max for entire project. Billing alerts to be set at $10
+  (warning) and $20 (stop) as FIRST step of Phase 3.
 
 ### Session 3 — 2026-06-12
 Building Phase 2b: MusicBrainz enrichment.
@@ -169,6 +191,9 @@ Built Phase 2: the full pipeline.
 - Created this file (docs/PRESENTATION_NOTES.md) as a running presentation reference.
 - dbt tests plan confirmed: built-in tests only (not_null, unique, accepted_values,
   relationships) — no custom tests unless ahead of schedule.
+- Daily automation: cron job runs run_pipeline.sh at 10:00am every day. On success/failure
+  a Mac desktop notification fires. Output logged to pipeline.log. This is temporary —
+  Phase 3-4 (AWS Glue + Step Functions) replaces it with cloud automation and SNS alerts.
 
 ### Session 1 — 2026-06-10
 Built Phase 0 (setup) and Phase 1 (thin slice).
