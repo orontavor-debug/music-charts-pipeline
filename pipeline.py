@@ -1,8 +1,11 @@
 import os
+import time
 from datetime import date
 import pandas as pd
 from dotenv import load_dotenv
 from src.lastfm import get_global_chart, get_country_chart, get_track_tags, pick_genre
+from src.musicbrainz import get_artist, _empty_result
+from load_to_postgres import load
 
 COUNTRIES = ["united states", "united kingdom", "germany", "brazil", "japan"]
 
@@ -27,6 +30,7 @@ def fetch_global(api_key):
             "playcount": track["playcount"],
             "listeners": track["listeners"],
             "mbid": track.get("mbid", ""),  # mbid is sometimes missing — .get() avoids a crash
+            "artist_mbid": track["artist"].get("mbid", ""),
             "url": track["url"],
         })
     return pd.DataFrame(rows)
@@ -48,6 +52,7 @@ def fetch_country(api_key, country):
             # geo endpoint never returns listeners — None becomes NULL in Postgres. Expected.
             "listeners": None,
             "mbid": track.get("mbid", ""),
+            "artist_mbid": track["artist"].get("mbid", ""),
             "url": track["url"],
         })
     return pd.DataFrame(rows)
@@ -82,6 +87,26 @@ def enrich_with_genre(api_key, df):
     return df
 
 
+def enrich_with_artist_metadata(df):
+    # Deduplicate by artist_mbid — same artist appears across multiple charts and tracks.
+    unique_artists = df[["artist_name", "artist_mbid"]].drop_duplicates(subset=["artist_mbid"])
+    artist_map = {}
+    print(f"Fetching MusicBrainz metadata for {len(unique_artists)} unique artists...", end="", flush=True)
+    for _, row in unique_artists.iterrows():
+        mbid = row["artist_mbid"].strip()
+        if mbid:
+            artist_map[mbid] = get_artist(mbid)
+        else:
+            # No MBID available — use empty result so the pipeline doesn't crash.
+            artist_map[mbid] = _empty_result()
+        print(".", end="", flush=True)
+        time.sleep(1.1)
+    print(" done")
+    for col in ["artist_origin_country", "artist_type", "artist_gender", "artist_begin_year"]:
+        df[col] = df["artist_mbid"].apply(lambda mbid: artist_map.get(mbid.strip(), _empty_result())[col])
+    return df
+
+
 if __name__ == "__main__":
     print("Fetching global chart...")
     df_global = fetch_global(API_KEY)
@@ -104,7 +129,11 @@ if __name__ == "__main__":
     print(df_all["genre"].value_counts())
     print(f"\nRows with unknown genre: {(df_all['genre'] == 'unknown').sum()}")
 
+    df_all = enrich_with_artist_metadata(df_all)
+
     df_all.to_csv("charts_clean.csv", index=False)
     print(f"\nSaved {len(df_all)} rows to charts_clean.csv")
 
     quality_check(df_all)
+
+    load("charts_clean.csv")

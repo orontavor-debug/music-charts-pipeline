@@ -9,6 +9,8 @@ PAUSE_SECONDS = 0.25
 # Last.fm tags are crowd-sourced and messy — usernames, personal labels, etc. appear
 # alongside real genres. We filter against this allowlist and take the first match.
 # "unknown" is the intentional fallback when no real genre tag is found.
+# Known limitation: ~40% of country-chart tracks (esp. Japanese, German, Brazilian
+# artists) have zero tags on Last.fm — "unknown" is correct for these, not a bug.
 KNOWN_GENRES = {
     "pop", "rock", "hip-hop", "r&b", "rnb", "soul", "jazz", "classical",
     "electronic", "dance", "indie", "alternative", "metal", "punk",
@@ -16,6 +18,7 @@ KNOWN_GENRES = {
     "bossa nova", "funk", "blues", "trap", "rap",
     "pop rock", "indie pop", "indie rock", "dance-pop", "electropop",
     "pop punk", "synthpop", "art pop", "dream pop",
+    "pop rap", "alt-pop", "dark pop", "alternative pop",
 }
 
 

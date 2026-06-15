@@ -66,6 +66,14 @@ Total = 300 rows
 The same track can appear multiple times (once per chart it's on). Each row = one track
 on one chart on one day. This is intentional — it's what allows cross-country comparison.
 
+### Genre coverage limitation — known and documented
+~42% of rows have genre="unknown". This is NOT a bug. Investigation showed 80% of
+unknown-genre tracks have zero tags at all on Last.fm — the remaining 20% have junk
+tags (usernames, personal labels). The gap is concentrated in country charts for
+non-English-speaking markets (Japan, Germany, Brazil) where Last.fm's crowd-sourced
+tags are sparse. Presentation line: "Genre coverage is 58% — the gap is in country
+charts for non-Western markets, a known limitation of crowd-sourced tagging."
+
 ### Why a KNOWN_GENRES allowlist for genre picking?
 Last.fm has no genre field. It returns crowd-sourced "tags" which are messy — usernames,
 personal labels ("seen live", "favorites"), non-genre words. We maintain a list of real
