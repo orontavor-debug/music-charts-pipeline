@@ -141,6 +141,26 @@ Run automatically every time `pipeline.py` runs:
 
 ## Session log (newest first)
 
+### Session 5 — 2026-06-15 (Phase 3)
+Moving the pipeline to AWS Glue.
+- Set up billing alerts: zero-spend budget (already active) + $20 monthly budget with
+  alerts at 85% ($17) and 100% ($20) + forecast alert. AWS budget cap is firm at $20.
+- IAM hurdle: terra_proj user needed AWSGlueConsoleFullAccess + iam:PassRole permission.
+  Also: Glue service role must be named AWSGlueServiceRole-* for PassRole to work via
+  AWSGlueConsoleFullAccess — naming convention matters, not obvious to beginners.
+- Decision: create Glue jobs via UI (avoids PassRole CLI friction), verify via CLI.
+- Glue role created: AWSGlueServiceRole-music-charts (S3FullAccess + AWSGlueServiceRole).
+- Job #1 (music-charts-fetch): Python Shell, 1/16 DPU, 30min timeout.
+  Fetches Last.fm global + 5 country charts → saves raw/YYYY-MM-DD/charts_raw.csv to S3.
+  Ran successfully in ~20 seconds. Verified raw file in S3 (54KB).
+- Job split rationale: Job #1 = raw fetch only. Job #2 = enrichment only.
+  If Job #2 fails, raw data is safe in S3 and Job #2 can be rerun without hitting Last.fm again.
+- Job #2 (music-charts-enrich): reads raw S3 file, adds genre (Last.fm tags) +
+  artist metadata (MusicBrainz), runs quality checks, saves clean/YYYY-MM-DD/charts_clean.csv.
+- Key technical difference from local pipeline: no local filesystem in Glue.
+  Use io.StringIO() buffer + s3_client.put_object() to write to S3.
+  Use s3_client.get_object() + io.BytesIO() to read from S3.
+
 ### Session 4 — 2026-06-15
 Completed Phase 2b and set up daily automation.
 - Built src/musicbrainz.py: second data source client. Respects 1.1s rate limit.
