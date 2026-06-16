@@ -12,7 +12,7 @@ This file orients you (Claude Code) at the start of every session. Read it first
 
 ## What this project is
 
-A data-engineering capstone: an automated pipeline that fetches live music chart data from the Last.fm API — the GLOBAL chart PLUS the top chart for 5 countries (United States, United Kingdom, Germany, Brazil, Japan) — cleans and enriches it (adds genre) with Python, stores it in AWS S3, loads it into a LOCAL Postgres warehouse, models it as a STAR SCHEMA with dbt, and shows trend KPIs in a Metabase dashboard. It runs daily and builds up a time series so we can see what's rising, falling, and trending — globally and per country.
+A data-engineering capstone: an automated pipeline that fetches live music chart data from the Last.fm API — the GLOBAL chart PLUS the top chart for 5 countries (United States, United Kingdom, Germany, Brazil, Japan) — enriches it with genre (Last.fm tags) and artist metadata (MusicBrainz: origin country, type, gender, formation year), stores it in AWS S3, loads it into a LOCAL Postgres warehouse, models it as a STAR SCHEMA with dbt, and shows trend KPIs in a Metabase dashboard. It runs daily and builds up a time series so we can see what's rising, falling, and trending — globally and per country.
 
 The geo/country layer is CORE (not optional): it adds real ingestion volume (loop over 5 countries), a star-schema modeling exercise (fact + track/artist/genre/ country/date dimensions), and a genuine cross-chart join. This is a data-engineering project, so that pipeline substance is the point — not BI polish.
 
@@ -116,8 +116,11 @@ Status key: [ ] todo · [~] in progress · [x] done
 
 ### Phase 5 — dbt star schema (Postgres)
 
-- [ ] dbt-postgres set up + connected
-- [ ] sources -> staging -> marts (fact_chart_entry + 5 dims)
+- [x] dbt-postgres set up + connected
+- [~] sources -> staging -> marts (fact_chart_entry + 5 dims)
+      staging layer done: sources.yml + stg_chart_entries.sql working
+      next: dimension tables (dim_track, dim_artist, dim_genre, dim_country, dim_date)
+      then: fact_chart_entry + schema.yml tests
 - [ ] window functions (rank_change, biggest movers)
 - [ ] dbt tests + docs/lineage
 - [ ] (stretch, optional) incremental models / rolling averages / SCD / custom tests
@@ -141,6 +144,7 @@ Status key: [ ] todo · [~] in progress · [x] done
 
 ### Session notes (free text — newest at top)
 
+- 2026-06-16: Phase 5 started. dbt-postgres 1.8.2 installed, project initialized (music_charts/), connected to local Postgres. Staging layer complete: sources.yml points at raw_chart_entries, stg_chart_entries.sql casts types + cleans nulls. dbt_project.yml updated: staging=view, marts=table. Next: dimension tables then fact_chart_entry.
 - 2026-06-16: Phase 4 complete. Step Functions state machine (music-charts-pipeline) chains Job #1 → Job #2 with retries and a Fail state. EventBridge schedule fires daily at 8:00am Berlin time. SNS topic (music-charts-notifications) + Lambda function (music-charts-notify) send success/failure email — tested and confirmed working. Local loader updated: load_to_postgres.py now has load_from_s3() that pulls clean S3 file into Postgres; cron job at 8:15am runs it daily. IAM note: oront is the console user (UI work), terra_proj is the programmatic user (API keys/CLI). Terminal granted Full Disk Access so cron jobs fire. Next: Phase 5 — dbt star schema.
 - 2026-06-15: Phase 3 complete. Both Glue jobs running in cloud. IAM hurdles: needed AWSGlueConsoleFullAccess + iam:PassRole inline policy + Glue role must be named AWSGlueServiceRole-* for PassRole to work. Decision: create jobs via UI, verify via CLI. Job #1 (music-charts-fetch): fetches Last.fm → raw/YYYY-MM-DD/ in S3, runs in ~20s. Job #2 (music-charts-enrich): reads raw S3, adds genre + MusicBrainz → clean/YYYY-MM-DD/ in S3, runs in ~2.5min. Job #2 initial failure: missing --S3_BUCKET parameter (not saved in job config). Next: Phase 4 — Step Functions orchestration.
 - 2026-06-15: Phase 2b complete. Built src/musicbrainz.py (1.1s rate limit, retries, _empty_result fallback). Added artist_mbid to pipeline rows. 4 new columns: artist_origin_country, artist_type, artist_gender, artist_begin_year. 291/300 rows have origin country. Genre unknown rate: 119/300 — documented limitation (80% of unknowns have zero tags, concentrated in non-Western country charts). load_to_postgres.py rewritten to APPEND with duplicate guard (checks snapshot_date before loading). First daily snapshot loaded: 2026-06-15, 300 rows in raw_chart_entries. Daily automation: cron job set to 10:00am via run_pipeline.sh — shows Mac desktop notification on success or failure. pipeline.log captures all output. AWS budget cap: $20 max, billing alerts at $10 and $20 to be set as first step of Phase 3. Next: Phase 3 — AWS Glue.

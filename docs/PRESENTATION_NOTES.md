@@ -8,7 +8,8 @@ behind technical choices. Updated every session. Use it to build your final pres
 ## What this project is (one sentence)
 
 An automated data pipeline that fetches daily music chart data from the Last.fm API —
-globally and for 5 countries — enriches it with genre, stores it in the cloud (AWS S3),
+globally and for 5 countries — enriches it with genre (Last.fm tags) and artist metadata
+(MusicBrainz: origin country, type, gender, formation year), stores it in the cloud (AWS S3),
 loads it into a local Postgres warehouse, models it as a star schema with dbt, and
 displays trend KPIs in a Metabase dashboard.
 
@@ -19,7 +20,8 @@ displays trend KPIs in a Metabase dashboard.
 | Tool | Role | Why chosen |
 |---|---|---|
 | Python + pandas | Fetch, clean, combine data | Industry standard for data engineering |
-| Last.fm API | Data source | Free, no OAuth, verified working |
+| Last.fm API | Music chart data + genre tags | Free, no OAuth, verified working |
+| MusicBrainz API | Artist metadata (origin, type, gender, year) | Free, open music database, joined via artist MBID |
 | AWS S3 | Cloud storage | Near-free, standard DE tool |
 | AWS Glue | Runs Python in the cloud | Real DE service, matches school examples |
 | AWS Step Functions | Orchestration | Runs jobs in order with retries |
