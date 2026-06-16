@@ -167,9 +167,33 @@ This cross-chart, mixed-key matching is real entity-resolution work — core dat
 **Phase 0 — Setup:** GitHub repo + README; Python venv + requirements.txt; confirm local Postgres (pgAdmin); AWS account + S3 bucket; Last.fm API key; install Docker (Metabase).
 **Phase 1 — Thin slice (local):** fetch GLOBAL chart once -> file -> load into Postgres by hand -> see rows. Proves the path. No geo/genre/Glue yet.
 **Phase 2 — Python fetch + clean (local):** API client (requests, retries, rate-limit pauses); derive global rank; LOOP over 5 countries (geo); enrichment loop (tags->genre); pandas combine global+countries into the tidy table; quality checks (matched-row counts).
+
+**Phase 2b — MusicBrainz enrichment (STRETCH — only if Phase 2 baseline works).**
+Optional second data source. Do NOT start this until Phase 2 is solid and committed.
+- For each artist, use the artist MBID (from Last.fm) to call MusicBrainz
+  (https://musicbrainz.org/ws/2/, free, no auth) and pull artist metadata:
+  country of origin, formation/begin year, type (group vs person), gender.
+- Join is clean (on MBID) — no fuzzy matching. Keep a "no MBID / not found" fallback.
+- MusicBrainz rate limit is strict (~1 request/second) -> pause between calls, cache
+  results (an artist rarely changes), only look up artists you haven't seen before.
+- Adds metadata to dim_artist (origin_country, begin_year, type, gender) and unlocks
+  questions like "are rising artists getting younger?" or "which countries PRODUCE
+  charting artists vs CONSUME them?".
+- This is the single highest-value upgrade: it makes the pipeline genuinely MULTI-SOURCE.
+- If added, update the schema (dim_artist), the architecture (a MusicBrainz lookup step),
+  and add 1 KPI (e.g. "charting artists by country of origin").
+
 **Phase 3 — Move code into AWS Glue:** Python into Glue (Job #1 fetch global+5 countries, Job #2 enrich/flatten), writing to S3; IAM permissions (the fiddly bit — go slow).
 **Phase 4 — Orchestrate (Step Functions + Lambda/SNS):** Job #1 then #2 with retries; Lambda->SNS notification; schedule daily; add the local loader (S3 -> Postgres).
 **Phase 5 — dbt star schema (Postgres):** dbt-postgres; sources -> staging -> marts (fact_chart_entry + dim_track/artist/genre/country/date); window functions (rank_change, movers); tests + docs/lineage.
+
+**Phase 5 depth options (STRETCH — add only if ahead of schedule).**
+These deepen the modeling layer without a new data source. Pick any, all optional:
+- Incremental dbt models (process only NEW snapshots instead of rebuilding all) — a real, interview-worthy dbt skill.
+- More window functions: rolling averages, "days on chart", week-over-week momentum, streaks.
+- A dbt snapshot / SCD to track how an artist's genre or metadata changes over time.
+- Custom dbt data-quality tests (beyond not-null/unique), e.g. rank within 1..50, no future dates.
+
 **Phase 6 — GitHub Actions:** workflow that runs dbt tests on push (stretch: upload Glue script to S3).
 **Phase 7 — Dashboard:** Metabase via Docker -> connect to Postgres -> build the 5 KPIs.
 **Phase 8 — Docs & demo:** README (what/why/how + run + screenshots); 1-page architecture diagram; demo script; future-work note.

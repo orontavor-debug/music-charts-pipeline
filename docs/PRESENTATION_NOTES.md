@@ -141,6 +141,26 @@ Run automatically every time `pipeline.py` runs:
 
 ## Session log (newest first)
 
+### Session 6 — 2026-06-16 (Phase 4)
+Full cloud orchestration and notification layer.
+- Step Functions state machine (music-charts-pipeline): chains Glue Job #1 → Job #2.
+  Each job has a Retry block (2 retries, 30s interval, 2x backoff) and a Catch that routes
+  to NotifyFailure if all retries are exhausted.
+- NotifySuccess / NotifyFailure states call Lambda at the end of every run.
+- Lambda function (music-charts-notify): publishes to SNS with a subject line showing
+  SUCCESS or FAILED. SNS delivers to email (orontavor@gmail.com). Confirmed working —
+  received success email after test execution.
+- EventBridge schedule (music-charts-daily): fires daily at 08:00 Berlin time (UTC+2).
+  Triggers the Step Functions state machine. Schedule type: Standard (not Express) because
+  we need .sync Glue integration which Express doesn't support.
+- Local loader updated: load_from_s3() pulls today's clean S3 file into Postgres.
+  Duplicate guard preserved — safe to run multiple times.
+- Cron job at 8:15am runs load_to_postgres.py — 15 min after cloud pipeline starts,
+  enough buffer for both Glue jobs to finish (~3 min total).
+- IAM note for interviews: two IAM users — oront (console/UI work) and terra_proj
+  (programmatic/CLI). Lambda needed SNS publish permission added to its execution role.
+- Terminal Full Disk Access granted on Mac so cron jobs actually fire.
+
 ### Session 5 — 2026-06-15 (Phase 3)
 Moving the pipeline to AWS Glue.
 - Set up billing alerts: zero-spend budget (already active) + $20 monthly budget with

@@ -109,10 +109,10 @@ Status key: [ ] todo · [~] in progress · [x] done
 
 ### Phase 4 — Orchestrate (Step Functions + Lambda/SNS)
 
-- [ ] Step Functions: run Job #1 then #2 with retries
-- [ ] Lambda + SNS success/failure notification
-- [ ] Schedule daily
-- [ ] Local loader: pull clean file from S3 -> write into Postgres
+- [x] Step Functions: run Job #1 then #2 with retries
+- [x] Lambda + SNS success/failure notification
+- [x] Schedule daily
+- [x] Local loader: pull clean file from S3 -> write into Postgres
 
 ### Phase 5 — dbt star schema (Postgres)
 
@@ -141,6 +141,7 @@ Status key: [ ] todo · [~] in progress · [x] done
 
 ### Session notes (free text — newest at top)
 
+- 2026-06-16: Phase 4 complete. Step Functions state machine (music-charts-pipeline) chains Job #1 → Job #2 with retries and a Fail state. EventBridge schedule fires daily at 8:00am Berlin time. SNS topic (music-charts-notifications) + Lambda function (music-charts-notify) send success/failure email — tested and confirmed working. Local loader updated: load_to_postgres.py now has load_from_s3() that pulls clean S3 file into Postgres; cron job at 8:15am runs it daily. IAM note: oront is the console user (UI work), terra_proj is the programmatic user (API keys/CLI). Terminal granted Full Disk Access so cron jobs fire. Next: Phase 5 — dbt star schema.
 - 2026-06-15: Phase 3 complete. Both Glue jobs running in cloud. IAM hurdles: needed AWSGlueConsoleFullAccess + iam:PassRole inline policy + Glue role must be named AWSGlueServiceRole-* for PassRole to work. Decision: create jobs via UI, verify via CLI. Job #1 (music-charts-fetch): fetches Last.fm → raw/YYYY-MM-DD/ in S3, runs in ~20s. Job #2 (music-charts-enrich): reads raw S3, adds genre + MusicBrainz → clean/YYYY-MM-DD/ in S3, runs in ~2.5min. Job #2 initial failure: missing --S3_BUCKET parameter (not saved in job config). Next: Phase 4 — Step Functions orchestration.
 - 2026-06-15: Phase 2b complete. Built src/musicbrainz.py (1.1s rate limit, retries, _empty_result fallback). Added artist_mbid to pipeline rows. 4 new columns: artist_origin_country, artist_type, artist_gender, artist_begin_year. 291/300 rows have origin country. Genre unknown rate: 119/300 — documented limitation (80% of unknowns have zero tags, concentrated in non-Western country charts). load_to_postgres.py rewritten to APPEND with duplicate guard (checks snapshot_date before loading). First daily snapshot loaded: 2026-06-15, 300 rows in raw_chart_entries. Daily automation: cron job set to 10:00am via run_pipeline.sh — shows Mac desktop notification on success or failure. pipeline.log captures all output. AWS budget cap: $20 max, billing alerts at $10 and $20 to be set as first step of Phase 3. Next: Phase 3 — AWS Glue.
 - 2026-06-12: Phase 2b decided — MusicBrainz enrichment is GO (not optional). Pre-flight checks showed 97% artist MBID coverage from Last.fm; MusicBrainz sample (15 artists) had 100% country/type/begin_year, 73% gender (groups have no gender — expected). Join key: artist MBID. Will add artist_mbid column to pipeline.py, build src/musicbrainz.py client, cache results to avoid repeat lookups.
@@ -160,10 +161,8 @@ Snowflake is a BACKUP / bonus cloud layer, added LATER as a SECOND dbt target (s
 models, swap the connection profile — dbt is warehouse-agnostic). If Snowflake works,
 demo the cloud version; if the trial lapses or breaks, fall back to Postgres instantly.
 - DO NOT create the Snowflake trial yet. It's only needed at Phase 5 (Week 3).
-- Start the trial when reaching Phase 5, NOT before (don't burn the 30 days during local dev).
-- Presentation is 2026-07-11. The 30-day trial MUST expire AFTER that. Starting on/after
-  ~June 13 gives buffer; starting at Phase 5 gives the most. Write the expiry date here
-  when the trial is created and double-check it's past July 11.
+- Trial created: 2026-06-16. Estimated expiry: 2026-07-16 (30 days). That's 5 days after
+  the July 11 presentation — acceptable buffer. Edition: Standard.
 - Portfolio line: "warehouse-agnostic dbt project — runs on local Postgres or cloud Snowflake
   by switching the target."
 
