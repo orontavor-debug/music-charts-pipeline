@@ -143,6 +143,37 @@ Run automatically every time `pipeline.py` runs:
 
 ## Session log (newest first)
 
+### Session 8 — 2026-06-17 (Phase 5: star schema)
+Built the full star schema in dbt.
+- Design discussion before any code: fact grain = one row per track, per chart, per day
+  (matches the existing 300 rows/day). 5 dimensions: dim_artist, dim_track, dim_genre,
+  dim_country, dim_date. Talked through WHY split fact/dimension at all — avoids
+  repeating descriptive text (artist profile, genre, etc.) on every fact row; dimension
+  tables let you fix data in one place and keep storage lean.
+- Surrogate keys: decided to generate our own via md5() hash of natural keys, rather than
+  trusting source IDs (artist_mbid/track_mbid) directly. Reasons: source MBIDs are
+  sometimes missing (~3% of artists), some dimensions have no source ID at all
+  (dim_country, dim_genre, dim_date), and a single consistent method is simpler to
+  explain and maintain than mixing approaches per dimension.
+- Why md5() instead of ROW_NUMBER()/sequential IDs: md5 is deterministic — the same
+  artist always hashes to the same key, every dbt run. Sequential IDs could shift
+  between reruns depending on row order, silently breaking every fact-to-dimension join.
+- Built dim_genre (27 rows), dim_country (6 rows), dim_date (3 rows, with year/month/day/
+  day_of_week derived columns), dim_artist (75 rows), dim_track (141 rows).
+- fact_chart_entry: recomputes the same md5() hash inline per dimension (no actual SQL
+  JOIN needed, since the hash is deterministic) — 900 rows = 3 snapshots x 300 rows,
+  confirming the transformation didn't lose or duplicate any rows.
+- Tests: unique + not_null on dim_artist.artist_key and dim_track.track_key (catches
+  the edge case where the same artist/track could get inconsistent metadata across
+  rows — would show up as a duplicate key, caught by the unique test). not_null +
+  relationships tests on every foreign key in fact_chart_entry (verifies every fact
+  row successfully matches a real dimension row). 14/14 tests passing.
+- Visualized with dbt docs generate + serve — lineage graph confirms
+  raw_chart_entries -> stg_chart_entries -> 5 dims + fact_chart_entry.
+- dbt-core version note: `pip install dbt-postgres` initially pulled in dbt-core
+  2.0.0-alpha.1 as a dependency (unstable). Force-installed dbt-core==1.8.8 to match
+  dbt-postgres==1.8.2 — both stable, compatible versions.
+
 ### Session 7 — 2026-06-17 (cron cleanup)
 Verified the cloud pipeline's second daily run, then cleaned up local automation.
 - 8:00am EventBridge-triggered run succeeded; clean file landed in S3 as expected.
