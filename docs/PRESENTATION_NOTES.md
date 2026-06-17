@@ -143,6 +143,23 @@ Run automatically every time `pipeline.py` runs:
 
 ## Session log (newest first)
 
+### Session 7 — 2026-06-17 (cron cleanup)
+Verified the cloud pipeline's second daily run, then cleaned up local automation.
+- 8:00am EventBridge-triggered run succeeded; clean file landed in S3 as expected.
+- The 8:15am local cron job (S3 → Postgres loader) silently failed to fire — no log
+  entry at all. Likely cause: Mac asleep, or Full Disk Access grant not yet fully
+  effective. Manually ran load_to_postgres.py and confirmed it works (300 rows loaded
+  for 2026-06-17) — the script itself is fine, only the cron trigger is unreliable.
+- Moved the local loader cron job to 10:15am, giving the cloud pipeline a wider buffer.
+- Removed the old 10:00am `run_pipeline.sh` cron job. That job was the pre-cloud full
+  local pipeline (fetch from Last.fm/MusicBrainz directly). It became redundant once
+  Glue took over fetch+enrich in Phase 3, and was silently duplicating API calls every
+  morning — harmless only because of the duplicate-date guard in load_to_postgres.py.
+  Lesson: when a manual/local process gets replaced by automation, remove it — don't
+  leave it running "just in case," it wastes API quota and can mask real failures.
+- Current state: ONE local cron job (10:15am S3 loader). The 8am cloud run is the
+  source of truth; the local job's only purpose is bridging cloud S3 to local Postgres.
+
 ### Session 6 — 2026-06-16 (Phase 4)
 Full cloud orchestration and notification layer.
 - Step Functions state machine (music-charts-pipeline): chains Glue Job #1 → Job #2.
