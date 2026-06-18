@@ -171,6 +171,28 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
 
 ### Session notes (free text — newest at top)
 
+- 2026-06-18: Conceptual session (no code changes besides docs). Walked through what dbt actually is
+  vs. Postgres — dbt is not a database and stores nothing; it only generates and runs SQL against
+  Postgres (CREATE TABLE AS SELECT for models, SELECT COUNT(*) checks for tests), then gets out of the
+  way. Once `dbt run` finishes, Postgres holds the tables and anything (Metabase, psql, pgAdmin) queries
+  them directly with zero dbt involvement — confirmed Metabase will connect straight to Postgres later,
+  same as dbt does. Toured the lineage graph via `dbt docs serve` (raw_chart_entries -> stg_chart_entries
+  -> 5 dims + fact -> fact_chart_entry_trends). Also added a build-order cross-reference note to
+  docs/PROJECT_PLAN.md so it doesn't contradict CLAUDE.md's "Build order plan" (Metabase before GitHub
+  Actions, despite Phase numbers running the other way) — committed as "Note build-order reordering...".
+  Assessed KPI feasibility against current tables ahead of Phase 7: 4 of 5 KPIs (#1 top tracks, #3 genre
+  breakdown, #4 trend over time, #5 biggest movers) are answerable directly off fact_chart_entry /
+  fact_chart_entry_trends with simple filter/group-by queries. KPI #2 ("global vs country") is the one
+  exception — it compares two different ROWS to each other (global row vs. country row, same track, same
+  day) rather than aggregating, so it needs a self-join; decided (reconfirmed) to design that as a small
+  dedicated dbt model once we're actually in Metabase and know the exact shape needed, not before.
+  Addressed a depth/complexity worry: recommended finishing the basics (Phase 7 Metabase, Phase 6 GitHub
+  Actions, Phase 8 docs) before revisiting Terraform/Snowflake, per the existing July 1 checkpoint trigger
+  — reframed that the project already has real depth (star schema, surrogate keys, multi-source enrichment,
+  window functions, 24 tests) independent of infra tooling. Pace estimate given: ~4 more sessions to
+  finish the basics (2 for Metabase, 1 for GitHub Actions, 1 for Phase 8 docs), comfortably inside the
+  July 1 checkpoint and July 10 presentation date. Next: Phase 7 — Metabase (Docker install, connect to
+  Postgres, build KPIs #1/#3/#4/#5 first, then design the KPI #2 self-join model).
 - 2026-06-18: Window functions built. New model fact_chart_entry_trends.sql joins fact_chart_entry to
   dim_date (for real chronological ordering — date_key is just a hash, doesn't sort), then uses
   LAG(rank) partitioned by track_key+country_key ordered by snapshot_date to get each track's previous

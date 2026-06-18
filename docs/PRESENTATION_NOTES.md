@@ -98,6 +98,41 @@ Decision: use only the 4 built-in dbt tests (not_null, unique, accepted_values,
 relationships). These are YAML config — no SQL needed. Easy to explain in interviews.
 Custom tests are out of scope unless ahead of schedule.
 
+### rank_change: LAG() window function, sign convention
+fact_chart_entry_trends joins fact_chart_entry to dim_date (needed because date_key is
+an md5 hash and doesn't sort chronologically — only the real snapshot_date does), then
+uses `LAG(rank) OVER (PARTITION BY track_key, country_key ORDER BY snapshot_date)` to
+pull each track's rank from its previous appearance in that same chart.
+`rank_change = previous_rank - rank` — climbing the chart (e.g. rank 5 -> rank 2) gives
+a positive number (5 - 2 = +3), falling gives negative. This makes "biggest movers" a
+plain `ORDER BY rank_change DESC`. A track's first-ever appearance in a chart has
+previous_rank = NULL and therefore rank_change = NULL — expected, not a bug (nothing to
+compare against yet).
+
+### Why use dbt at all, if the data already lives in Postgres?
+Common point of confusion, worth having a clean answer for in interviews: dbt is not a
+database and stores nothing. It only generates and runs SQL against Postgres (CREATE
+TABLE AS SELECT for each model, SELECT COUNT(*) checks for each test), then gets out of
+the way. Once `dbt run` finishes, the resulting tables sit in Postgres like any other
+table — Metabase, pgAdmin, psql, anything that speaks SQL queries them directly with
+zero dbt involvement. What dbt actually buys us: (1) dependency ordering — it knows
+fact_chart_entry depends on the dimensions which depend on staging, and builds in the
+right order automatically; (2) reusable references via ref() instead of copy-pasted SQL;
+(3) a built-in test framework (not_null/unique/relationships) instead of hand-written
+QA queries; (4) auto-generated lineage documentation (dbt docs); (5) every model is a
+version-controlled .sql file, so the transformation logic has real git history.
+
+### Why a single fact table grain works for most KPIs
+Checked all 5 planned KPIs against fact_chart_entry / fact_chart_entry_trends before
+starting Metabase work. 4 of 5 (top tracks now, genre breakdown by country, trend over
+time, biggest movers) are answerable directly with a filter + GROUP BY against the
+existing tables — a sign the fact grain ("one row per track, per chart, per day") was
+the right choice. The exception is "global vs country" (comparing a track's global rank
+to its rank in a specific country chart, same day) — that's not an aggregation, it's a
+comparison between two specific rows, which needs a self-join. Decided to design that
+as its own small dbt model once we're in Metabase and know the exact shape the chart
+needs, rather than guessing ahead of time.
+
 ---
 
 ## Hurdles encountered and how we solved them
@@ -142,6 +177,40 @@ Run automatically every time `pipeline.py` runs:
 ---
 
 ## Session log (newest first)
+
+### Session 10 — 2026-06-18 (conceptual: dbt explained, KPI feasibility, project depth strategy)
+No code changes besides docs. A learning-focused session to cement understanding before
+moving into Metabase.
+- Walked through dbt vs. Postgres conceptually (kitchen analogy: Postgres is the kitchen
+  where food/data actually lives; dbt is the recipe book + sous-chef that tells the
+  kitchen what to cook and in what order, then steps aside). See "Why use dbt at all"
+  design decision above for the full answer.
+- Toured the lineage graph live via `dbt docs serve` — confirmed visually that
+  raw_chart_entries -> stg_chart_entries -> 5 dims + fact_chart_entry -> fact_chart_entry_trends
+  matches the intended design.
+- Added a cross-reference note to docs/PROJECT_PLAN.md so it doesn't contradict
+  CLAUDE.md's settled build order (Metabase before GitHub Actions despite the phase
+  numbers running 6-then-7) — both docs now agree on what's actually next.
+- Pre-checked KPI feasibility against existing tables before starting Metabase — see
+  "Why a single fact table grain works for most KPIs" above. Result: only 1 of 5 KPIs
+  needs new modeling work (a self-join for "global vs country"), deferred until Phase 7.
+- Addressed a project-depth/complexity worry: recommended finishing the 3 remaining
+  basics (Metabase, GitHub Actions, Phase 8 docs) before revisiting the Terraform/
+  Snowflake stretch goals, consistent with the already-settled July 1 checkpoint.
+  Reframed that real depth already exists independent of infra tooling: a genuine star
+  schema with deterministic surrogate keys, multi-source enrichment (Last.fm +
+  MusicBrainz), window functions, and 24 passing dbt tests. Pace estimate: ~4 more
+  sessions to finish the basics (2 for Metabase, 1 for GitHub Actions, 1 for Phase 8),
+  comfortably inside the July 1 checkpoint and the July 10 presentation date.
+
+### Session 9 — 2026-06-18 (Phase 5: window functions)
+Closed out Phase 5 by adding rank_change.
+- Built fact_chart_entry_trends.sql — see "rank_change: LAG() window function, sign
+  convention" design decision above for the full mechanics.
+- 900 rows, 10/10 new tests passing (24/24 total project-wide). Spot-checked the top
+  movers directly in psql to confirm correctness against real data (one track moved
+  from rank 42 to rank 26 — correctly showed rank_change = +16).
+- This closes Phase 5 entirely (all checklist items done). Next: Phase 7 — Metabase.
 
 ### Session 8 — 2026-06-17 (Phase 5: star schema)
 Built the full star schema in dbt.
