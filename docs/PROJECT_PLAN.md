@@ -198,6 +198,12 @@ These deepen the modeling layer without a new data source. Pick any, all optiona
 **Phase 7 — Dashboard:** Metabase via Docker -> connect to Postgres -> build the 5 KPIs.
 **Phase 8 — Docs & demo:** README (what/why/how + run + screenshots); 1-page architecture diagram; demo script; future-work note.
 
+> **BUILD ORDER NOTE (decided 2026-06-18, see CLAUDE.md "Build order plan"):** the numbers above
+> are the original plan, but the actual BUILD ORDER for remaining work is Phase 7 (Metabase) BEFORE
+> Phase 6 (GitHub Actions) — Metabase is the core deliverable explicitly promised in this document's
+> KPI section, GitHub Actions is process polish around dbt tests that already exist. Phase 8 still
+> comes last. This note exists so this document and CLAUDE.md don't disagree about what's next.
+
 ## 10. Week-by-week (4 weeks)
 - **Week 1:** Phases 0-1 (setup + thin slice). Start daily snapshots ASAP. Deliver README skeleton + architecture diagram.
 - **Week 2:** Phases 2-4 (Python with geo + Glue + Step Functions + local loader). Deliver cloud ingestion + S3 + Postgres screenshots.
