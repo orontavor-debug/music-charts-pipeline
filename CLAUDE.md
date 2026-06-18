@@ -70,6 +70,29 @@ This is the project's memory. At the START of each session, read this to see whe
 
 Status key: [ ] todo · [~] in progress · [x] done
 
+### Build order plan (SETTLED 2026-06-18)
+
+Presentation date: July 10, 2026. Goal: fully working + polished by end of first week
+of July, leaving ~1 week for rehearsal/polish before the 10th.
+
+Priority order for remaining work:
+1. [x] dbt window functions (rank_change, biggest movers) — unblocks dashboard KPIs — DONE 2026-06-18
+2. Phase 7 — Metabase dashboard (core deliverable, explicitly promised in project description)
+   Note: KPI #2 "Global vs country" (same track's rank globally vs. a country chart, same day) is a
+   separate comparison from rank_change (same chart, different day) — decide at Phase 7 whether it
+   needs its own dbt model or can be a direct Metabase query against fact_chart_entry.
+3. Phase 6 — GitHub Actions (dbt tests on push)
+4. Phase 8 — docs, architecture diagram, demo script
+
+**Terraform (IaC) is a STRETCH goal, not in the original 8 phases.** Added only to close
+a gap vs. a classmate's project (they used Terraform + Airflow; we used manual AWS console
+setup + dbt CLI). Plan: use `terraform import` to bring already-existing AWS resources
+(S3, Glue x2, IAM roles, Step Functions, EventBridge schedule, Lambda, SNS) under Terraform
+management WITHOUT recreating them — zero risk to the working pipeline.
+TRIGGER: only attempt this if steps 1-4 above are done before ~July 1. If not done by then,
+skip it entirely and spend the remaining time on rehearsal/polish instead.
+>>> When steps 1-4 are complete, proactively remind the user it's time to consider Terraform. <<<
+
 ### Phase 0 — Setup
 
 - [x] Create GitHub repo + README skeleton
@@ -121,9 +144,11 @@ Status key: [ ] todo · [~] in progress · [x] done
       staging: sources.yml + stg_chart_entries.sql
       dims: dim_artist (75 rows), dim_country (6), dim_date (3), dim_genre (27), dim_track (141)
       fact_chart_entry: 900 rows (3 days x 300 rows) — surrogate keys via md5() hash
-- [ ] window functions (rank_change, biggest movers)
+- [x] window functions (rank_change, biggest movers)
+      fact_chart_entry_trends: LAG(rank) over (partition by track_key, country_key order by snapshot_date)
+      rank_change = previous_rank - rank (positive = climbed, negative = fell); 900 rows, 10/10 tests passing
 - [x] dbt tests + docs/lineage
-      14 tests passing (unique/not_null on dim keys, not_null + relationships on all fact FKs)
+      24 tests passing (unique/not_null on dim keys, not_null + relationships on all fact + fact_trends FKs)
       lineage graph verified via dbt docs generate + serve
 - [ ] (stretch, optional) incremental models / rolling averages / SCD / custom tests
       — see "Phase 5 depth options" in PROJECT_PLAN.md; only if ahead of schedule
@@ -146,6 +171,19 @@ Status key: [ ] todo · [~] in progress · [x] done
 
 ### Session notes (free text — newest at top)
 
+- 2026-06-18: Window functions built. New model fact_chart_entry_trends.sql joins fact_chart_entry to
+  dim_date (for real chronological ordering — date_key is just a hash, doesn't sort), then uses
+  LAG(rank) partitioned by track_key+country_key ordered by snapshot_date to get each track's previous
+  rank in that same chart. rank_change = previous_rank - rank (positive = climbed, negative = fell);
+  NULL on a track's first-ever appearance in a chart (no prior value to compare to) — expected, not a
+  bug. 900 rows, 10/10 new tests passing (24/24 total across the project). Spot-checked top movers in
+  psql — logic confirmed correct (e.g. rank 42 -> 26 showed rank_change = +16). This closes Phase 5.
+  Also clarified a scope question: user asked about comparing a track's global rank to its rank in its
+  origin country — this is KPI #2 "Global vs country" in PROJECT_PLAN.md, a DIFFERENT comparison from
+  rank_change (same chart over time vs. same day across charts). Decided to defer building it until
+  Phase 7 (Metabase), where we'll know the exact shape the dashboard needs before deciding if it
+  warrants its own dbt model or can be a direct query. Next: Phase 7 — Metabase dashboard.
+- 2026-06-18: Build order planning session. Compared architecture against a classmate's project (they use Terraform IaC + Airflow orchestrating dbt in Docker + Snowflake as primary warehouse + CI/CD that deploys infra). Assessment: their project leans more into platform/DevOps maturity; ours leans more into data modeling depth (real star schema with surrogate keys + 14 passing tests vs. their less clear dimensional modeling). Decided NOT to add Airflow or switch to Snowflake-primary — out of scope and not worth the risk this close to presentation. DID decide to add Terraform as a stretch goal (see "Build order plan" section above) since it's a contained, low-risk addition via `terraform import` (adopts existing resources, no rebuild). Presentation date confirmed as July 10, 2026 — user wants a polished, fully-working project by end of first week of July. Settled priority order: window functions -> Phase 7 (Metabase) -> Phase 6 (GitHub Actions) -> Phase 8 (docs) -> Terraform only if time remains before ~July 1. Next: build dbt window functions for rank_change / biggest movers.
 - 2026-06-17: Phase 5 star schema complete. Built all 5 dimensions (dim_artist, dim_country, dim_date, dim_genre, dim_track) and fact_chart_entry in models/marts/. Surrogate keys generated via md5() hash of natural keys (e.g. md5(artist_name || '-' || artist_mbid)) — deterministic so keys stay stable across reruns, unlike ROW_NUMBER(). fact_chart_entry built by recomputing the same hash inline (no joins needed since md5 is deterministic) — 900 rows = 3 daily snapshots x 300 rows, confirming no rows lost/duplicated. 14 dbt tests passing: unique+not_null on dim_artist.artist_key and dim_track.track_key, not_null+relationships on all 5 fact foreign keys. Verified lineage visually with dbt docs generate + serve — raw_chart_entries -> stg_chart_entries -> 5 dims + fact, exactly as designed. Remaining Phase 5 stretch: window functions for rank_change/biggest movers (useful for KPIs, not yet built). Next: decide whether to build window functions now or move to Phase 6 (GitHub Actions) / Phase 7 (Metabase).
 - 2026-06-17: Cron cleanup. The 8:15am S3-loader cron job silently didn't fire (no log entry) — likely Mac asleep or Full Disk Access not fully effective yet. Moved it to 10:15am (after the 8:00am cloud pipeline has plenty of time to finish) and confirmed by running it manually: 300 rows loaded for 2026-06-17. Also removed the old 10:00am `run_pipeline.sh` cron job — it was the pre-cloud full local pipeline (fetch + enrich locally) and is now redundant since Glue does that in AWS; it was silently duplicating API calls (harmless due to the duplicate-date guard, but wasteful). Current automation: 8:00am EventBridge → Step Functions → Glue fetch → Glue enrich → S3 clean file → email notification; 10:15am local cron → load_to_postgres.py pulls that S3 file into Postgres. Only one local cron job remains.
 - 2026-06-16: Phase 5 started. dbt-postgres 1.8.2 installed, project initialized (music_charts/), connected to local Postgres. Staging layer complete: sources.yml points at raw_chart_entries, stg_chart_entries.sql casts types + cleans nulls. dbt_project.yml updated: staging=view, marts=table. Next: dimension tables then fact_chart_entry.

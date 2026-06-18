@@ -52,3 +52,37 @@ models:
           - relationships:
               to: ref('dim_genre')
               field: genre_key
+
+  - name: fact_chart_entry_trends
+    description: "One row per track, per chart, per day, with rank_change vs. that track's previous appearance in the same chart"
+    columns:
+      - name: date_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: country_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_country')
+              field: country_key
+      - name: artist_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_artist')
+              field: artist_key
+      - name: track_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_track')
+              field: track_key
+      - name: genre_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_genre')
+              field: genre_key
