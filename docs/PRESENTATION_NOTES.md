@@ -122,6 +122,19 @@ right order automatically; (2) reusable references via ref() instead of copy-pas
 QA queries; (4) auto-generated lineage documentation (dbt docs); (5) every model is a
 version-controlled .sql file, so the transformation logic has real git history.
 
+### Why chain dbt into the daily load (run_daily_pipeline.sh)
+Realized a second gap behind the duplicate-key bug above: even on a day the cron job DID fire
+successfully, it only loaded raw rows into Postgres — it never re-ran dbt. So a bad day's data
+(like the Justin Bieber gap) could sit silently in `raw_chart_entries`, completely untested,
+until someone happened to run `dbt run && dbt test` by hand. The tests we built are only useful
+if they actually run. Fix: `run_daily_pipeline.sh` — one script doing load -> dbt run -> dbt test
+as a single chain, called identically by the daily cron job (no argument = load today) and by
+manual backfills (one argument = a specific past date). Either path now always ends with all 24
+dbt tests running against the freshest data. This is deliberately a different safety net from
+Phase 6 (GitHub Actions running dbt tests on push): GitHub Actions catches bugs in the SQL/model
+*code* when it changes; this catches bad *data* the moment it arrives, regardless of whether the
+code changed at all. Both matter, for different failure modes — one isn't a substitute for the other.
+
 ### Why a single fact table grain works for most KPIs
 Checked all 5 planned KPIs against fact_chart_entry / fact_chart_entry_trends before
 starting Metabase work. 4 of 5 (top tracks now, genre breakdown by country, trend over
@@ -158,6 +171,58 @@ Some tracks had no real genre tags — only usernames and personal labels like
 Also found that `rnb` and `r&b` are both used as tags — added both to the list.
 Also added sub-genres like `pop rock`, `indie pop`, `synthpop` to reduce unknowns.
 
+### Hurdle: dbt tests caught a real duplicate-surrogate-key bug once more days accumulated
+This is a good story for the presentation — it's a real example of tests catching a real bug,
+not a contrived demo. While connecting Metabase, noticed Postgres was stuck at 2026-06-17 even
+though the cloud pipeline had clean data in S3 through 6-20 (a 3-day gap from a silently-failing
+local cron job — see the cron hurdle below). After backfilling those 3 days and rerunning
+`dbt run`, 11 of 24 tests suddenly failed: 1 duplicate `artist_key`, 10 duplicate `track_key`.
+With only 3 days of data these had never shown up — they needed enough days for the same
+artist/track to appear with slightly different metadata on different snapshots.
+
+Investigated both failures by querying the actual duplicate rows directly (not guessing):
+- **dim_artist:** Justin Bieber — same name, same MusicBrainz ID, but the `artist_origin_country`/
+  `artist_type`/`artist_gender`/`artist_begin_year` columns were fully populated on 5 of 6 days and
+  completely blank on 2026-06-19 only. This points to a transient MusicBrainz API failure (timeout
+  or rate-limit) during that single day's Glue enrichment run — not a missing artist, just one bad
+  lookup that fell back to the "not found" empty result.
+- **dim_track:** 10 tracks (mostly Olivia Rodrigo's catalog) got a *different* `track_mbid` from
+  Last.fm on different days for the exact same track name + artist (e.g. "begged" had mbid
+  `977a73bd...` on one day and `17a144ec...` on another). This means Last.fm's mbid linking for a
+  track isn't fully stable across API requests — a genuine, interesting real-world data-quality
+  finding, not a bug in our code.
+
+**Root cause in our own SQL, not the source data:** `dim_artist.sql` and `dim_track.sql` both used
+`SELECT DISTINCT` across *all* columns (identity columns + metadata columns together). Our
+surrogate key (`artist_key` / `track_key`) is deliberately computed from only the *identity*
+columns (name + mbid, or name + artist) — so whenever a metadata column differed between two
+days for the same identity, `SELECT DISTINCT` produced two separate rows that both hashed to the
+identical key. That's precisely the edge case we'd worried about and built the `unique` test for
+back when we first designed `dim_artist` — it just took more days of real data to actually trigger it.
+
+**The fix:** changed both models from `SELECT DISTINCT` to `GROUP BY` the identity columns, with
+`MAX()` applied to every metadata column. Two things `MAX()` buys for free: (1) `GROUP BY`
+guarantees exactly one row per surrogate key — duplicates become structurally impossible; (2)
+`MAX()` ignores `NULL`s, so it automatically "self-heals" gaps — Justin Bieber's blank 6-19 row
+gets silently replaced by the real `CA / Person / Male / 1994` values pulled from any of the other
+5 good days. Reran `dbt test`: 24/24 passing again, with the underlying data quietly fixed.
+**Presentation line:** "Our dbt tests aren't just boilerplate — they caught a real data
+inconsistency caused by a flaky third-party API call, and the fix was a one-line aggregation
+change that also self-heals future gaps of the same kind."
+
+### Hurdle: local cron job for the S3 -> Postgres loader silently wasn't firing
+Root-caused via two live, controlled tests rather than guessing: scheduled one test cron job
+writing to a file in the home directory, and a second writing to a file inside the Desktop-based
+project folder. **Both succeeded** — which ruled out the "macOS Full Disk Access" theory we'd
+suspected back in an earlier session (Desktop/Documents/Downloads are TCC-protected on macOS, and
+we'd assumed that was blocking cron). With that ruled out, the most likely explanation is the
+one we'd already half-suspected: the Mac is asleep at 10:15am most mornings, and cron does not
+wake a sleeping machine — a skipped run leaves absolutely no trace (no log line, no error, nothing).
+**Decision:** don't fight macOS power-management settings for a local-only convenience script —
+not worth the effort/risk this close to the deadline. The cloud pipeline's SNS email notification
+already confirms every day when fresh data is sitting in S3, so a missed local sync is easy to
+spot and fix with a quick manual backfill, which is itself now a single command (see below).
+
 ### Hurdle: country charts missing playcount
 The `geo.getTopTracks` endpoint doesn't always return `playcount`. Our code crashed
 with `KeyError: 'playcount'`. Fix: use `.get("playcount", None)` instead of
@@ -177,6 +242,24 @@ Run automatically every time `pipeline.py` runs:
 ---
 
 ## Session log (newest first)
+
+### Session 11 — 2026-06-20 (Phase 7 started: Metabase + a real data-integrity bug)
+Installed Docker, ran Metabase as a container (port 3000, persistent volume `metabase-data` so
+dashboard work survives restarts), connected it to local Postgres via `host.docker.internal`
+(containers can't reach the host machine through `localhost`) — confirmed all 9 Postgres tables
+visible in Metabase's data browser.
+- Before building any KPIs, found and fixed a real 3-day data gap and a real duplicate-surrogate-
+  key bug — see "Hurdle: dbt tests caught a real duplicate-surrogate-key bug" and "Hurdle: local
+  cron job ... silently wasn't firing" above for the full story and root-cause investigation.
+  Short version: backfilled 6-18/6-19/6-20 from S3, which surfaced 11 dbt test failures once 6
+  days of real data existed; fixed dim_artist.sql and dim_track.sql (SELECT DISTINCT -> GROUP BY
+  + MAX()); 24/24 tests passing again, with the fix also self-healing the underlying gap.
+- Built run_daily_pipeline.sh (see "Why chain dbt into the daily load" above) so dbt tests run
+  automatically every time data is loaded, whether via cron or manual backfill, going forward.
+- Next: build the first Metabase questions — KPI #1 (top tracks now), #3 (genre breakdown by
+  country), #4 (trend over time), #5 (biggest movers) — all answerable directly off
+  fact_chart_entry / fact_chart_entry_trends. KPI #2 (global vs country) still deferred until we
+  know the exact shape needed.
 
 ### Session 10 — 2026-06-18 (conceptual: dbt explained, KPI feasibility, project depth strategy)
 No code changes besides docs. A learning-focused session to cement understanding before

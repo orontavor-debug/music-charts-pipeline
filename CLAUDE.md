@@ -100,7 +100,7 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
 - [x] Confirm local Postgres works (pgAdmin) — db: music_charts, user: orontavor, port: 5432
 - [x] Create AWS account + an S3 bucket — bucket: music-charts-pipeline-orontavor
 - [x] Get Last.fm API key (store in .env, NOT in code)
-- [ ] Install Docker (for Metabase later — can wait)
+- [x] Install Docker (for Metabase later — can wait)
 
 ### Phase 1 — Thin slice (local)
 
@@ -159,7 +159,10 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
 
 ### Phase 7 — Dashboard (Metabase)
 
-- [ ] Metabase via Docker, connected to Postgres
+- [x] Metabase via Docker, connected to Postgres
+      Container `metabase` running via docker run, persistent volume `metabase-data` so dashboards
+      survive restarts. Connected to local Postgres using host.docker.internal:5432/music_charts
+      (containers can't reach the host via localhost). All 9 tables visible in Metabase's data browser.
 - [ ] Build the 5 KPIs
 
 ### Phase 8 — Docs & demo
@@ -171,6 +174,32 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
 
 ### Session notes (free text — newest at top)
 
+- 2026-06-20: Phase 7 started + a real data-integrity bug found and fixed. Installed Docker, ran
+  Metabase via Docker (persistent volume), connected it to local Postgres using host.docker.internal
+  (containers can't reach the host via localhost) — all 9 tables visible in Metabase. Before building
+  KPIs, discovered local Postgres was stuck at 2026-06-17 (3-day gap) even though S3 had clean data
+  through 6-20 — the cloud pipeline was fine, only the local cron bridge (S3 -> Postgres) wasn't firing.
+  Backfilled the 3 missing days manually, which surfaced a real dbt test failure once 6 days of data
+  existed: 1 duplicate artist_key (Justin Bieber — MusicBrainz returned blank metadata on 6-19 only,
+  a transient lookup failure) and 10 duplicate track_key (mostly Olivia Rodrigo tracks — Last.fm
+  returns a different track_mbid for the same track on different days). Root cause: dim_artist/
+  dim_track used SELECT DISTINCT across ALL columns, so any day-to-day metadata difference for the
+  same identity produced two rows colliding on the same surrogate key. Fixed both models: SELECT
+  DISTINCT -> GROUP BY identity columns + MAX() on metadata columns — guarantees one row per key AND
+  self-heals nulls (MAX ignores NULL, so Justin Bieber's blank 6-19 row gets backfilled from a good
+  day). Verified: 24/24 tests passing, Justin Bieber now one clean row with full metadata. Separately
+  diagnosed the cron issue with two live test jobs (one writing to home dir, one to the Desktop-based
+  project folder) — both succeeded, which rules out the macOS Full Disk Access theory from an earlier
+  session; real cause is almost certainly the Mac being asleep at 10:15am (cron doesn't wake a sleeping
+  Mac, and a skipped run leaves zero trace). Decided NOT to fight macOS power settings for this —
+  occasional manual backfill is an acceptable fallback since the cloud pipeline's SNS email already
+  confirms when a day's data is ready in S3. Bigger fix: realized the daily cron job, even when it DID
+  fire, never re-ran dbt — so a bad day's data could sit untested indefinitely. Built
+  run_daily_pipeline.sh: one script chaining load -> dbt run -> dbt test, used both by cron (no
+  argument = today) and manual backfills (date argument = specific day) — tests now run every time
+  data is loaded, not just when someone remembers to run dbt by hand. Also added an optional CLI date
+  argument to load_to_postgres.py to support this. Next: build the first Metabase KPIs (#1 top tracks,
+  #3 genre breakdown, #4 trend over time, #5 biggest movers) against the now-fixed, 6-day-deep data.
 - 2026-06-18: Conceptual session (no code changes besides docs). Walked through what dbt actually is
   vs. Postgres — dbt is not a database and stores nothing; it only generates and runs SQL against
   Postgres (CREATE TABLE AS SELECT for models, SELECT COUNT(*) checks for tests), then gets out of the
