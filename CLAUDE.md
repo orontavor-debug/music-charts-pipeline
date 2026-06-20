@@ -163,7 +163,16 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
       Container `metabase` running via docker run, persistent volume `metabase-data` so dashboards
       survive restarts. Connected to local Postgres using host.docker.internal:5432/music_charts
       (containers can't reach the host via localhost). All 9 tables visible in Metabase's data browser.
-- [ ] Build the 5 KPIs
+- [~] Build the 5 KPIs
+      KPI 1 (Top Tracks Now - Global) DONE: bar chart, joins fact_chart_entry -> dim_track/dim_artist/
+      dim_country/dim_date, filtered to chart_scope=global + snapshot_date=today, sorted by rank asc,
+      limit 10. Custom column concat(Artist Name, " — ", Track Name) used as X-axis label since neither
+      raw column alone shows both. Y-axis = Playcount (chose this over Rank since rank is an ordering,
+      not a magnitude — using it as bar height would visually invert "better"). Saved as
+      "KPI 1 - Top Tracks Now (Global)".
+      KPI 3 (Genre breakdown by country) IN PROGRESS: joins fact_chart_entry -> dim_country + dim_genre
+      started, not yet filtered/summarized/saved.
+      KPI 2, 4, 5 not started.
 
 ### Phase 8 — Docs & demo
 
@@ -198,8 +207,21 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
   run_daily_pipeline.sh: one script chaining load -> dbt run -> dbt test, used both by cron (no
   argument = today) and manual backfills (date argument = specific day) — tests now run every time
   data is loaded, not just when someone remembers to run dbt by hand. Also added an optional CLI date
-  argument to load_to_postgres.py to support this. Next: build the first Metabase KPIs (#1 top tracks,
-  #3 genre breakdown, #4 trend over time, #5 biggest movers) against the now-fixed, 6-day-deep data.
+  argument to load_to_postgres.py to support this. Built KPI 1 (Top Tracks Now - Global) end-to-end in
+  Metabase's visual query builder, step by step in the UI: joined fact_chart_entry to dim_track/
+  dim_artist/dim_country/dim_date (inner joins throughout, since relationships tests already guarantee
+  matches), filtered to chart_scope=global + snapshot_date=today, sorted by rank ascending, limited to
+  10 rows, added a custom column (concat of artist + track name, since neither raw dimension column
+  alone identifies a bar) for the X-axis, Playcount as Y-axis. Result: global chart on 2026-06-20 is
+  dominated by Olivia Rodrigo (ranks 1-13) — verified this is real data (not a join bug) by cross-
+  checking the same query directly in psql. Noted a real, presentation-worthy nuance: bar height
+  (playcount) doesn't strictly decrease with rank, because Last.fm's global rank is derived from API
+  list order (likely recency/momentum-weighted), not raw cumulative playcount — documented in
+  PROJECT_PLAN.md already as "derive rank from list order," now visually confirmed in the dashboard.
+  Saved as "KPI 1 - Top Tracks Now (Global)". Started KPI 3 (genre breakdown by country): joins to
+  dim_country + dim_genre in progress, not yet filtered/summarized/saved. Next: finish KPI 3 (Summarize
+  by count, group by chart_scope + genre, stacked bar), then KPI 4 (trend over time) and KPI 5
+  (biggest movers), then circle back to KPI 2 (global vs country) once the shape is clearer.
 - 2026-06-18: Conceptual session (no code changes besides docs). Walked through what dbt actually is
   vs. Postgres — dbt is not a database and stores nothing; it only generates and runs SQL against
   Postgres (CREATE TABLE AS SELECT for models, SELECT COUNT(*) checks for tests), then gets out of the
