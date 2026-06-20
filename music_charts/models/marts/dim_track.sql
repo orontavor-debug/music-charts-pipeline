@@ -1,10 +1,11 @@
 with distinct_tracks as (
-    select distinct
+    select
         track_name,
         artist_name,
-        track_mbid,
-        url
+        max(track_mbid) as track_mbid,
+        max(url) as url
     from {{ ref('stg_chart_entries') }}
+    group by track_name, artist_name
 )
 
 select

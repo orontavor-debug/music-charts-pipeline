@@ -58,4 +58,8 @@ def load(csv_path="charts_clean.csv"):
 
 
 if __name__ == "__main__":
-    load_from_s3()
+    import sys
+    # No argument -> load today's date (used by the daily cron job).
+    # One argument (YYYY-MM-DD) -> backfill that specific day.
+    snapshot_date = sys.argv[1] if len(sys.argv) > 1 else None
+    load_from_s3(snapshot_date)
