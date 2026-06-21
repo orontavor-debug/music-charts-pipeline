@@ -170,9 +170,36 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
       raw column alone shows both. Y-axis = Playcount (chose this over Rank since rank is an ordering,
       not a magnitude — using it as bar height would visually invert "better"). Saved as
       "KPI 1 - Top Tracks Now (Global)".
-      KPI 3 (Genre breakdown by country) IN PROGRESS: joins fact_chart_entry -> dim_country + dim_genre
-      started, not yet filtered/summarized/saved.
-      KPI 2, 4, 5 not started.
+      KPI 3 (Genre breakdown by country) DONE: stacked bar, joins fact_chart_entry -> dim_country +
+      dim_genre, filtered to chart_scope != global + snapshot_date=today, Summarize (Count, group by
+      Chart Scope + Genre). Metabase auto-chose genre on X-axis with country stacked inside each bar
+      (kept this orientation — equally valid, arguably more readable than country-on-X). "unknown"
+      genre dominates the chart (~90 entries) — kept deliberately rather than filtered out, ties to the
+      documented genre-coverage limitation (~42% unknown), decided to use as a presentation talking
+      point rather than hide it. Saved as "KPI 3 - Genre Breakdown by Country".
+      KPI 4 (Trend over time) DONE: line chart, same 4 joins as KPI 1, filtered to chart_scope=global +
+      rank<=5 (capped at 5 lines after rank<=10 caused color collisions with 12 lines), X-axis=Snapshot
+      Date, Y-axis=Rank, series=Track (Artist) custom column. Tried flipping the Y-axis intuition with a
+      "51 - Rank" custom column (so climbing the chart visually goes up) — this BACKFIRED: with only
+      ranks 1-5 in view, the transform compresses everything into a tiny 4-point band near the top of an
+      implied 0-50 scale, hiding the line crossings. Reverted to raw Rank (auto-scales to the small 1-5
+      range, crossings clearly visible) and deleted the unused custom column. Lesson: an axis "fix" that
+      solves a problem in the abstract can hurt readability once the data range is already narrow — kept
+      raw Rank, added a verbal caveat instead ("lower = better") rather than transforming the data.
+      Saved as "KPI 4 - Trend Over Time (Global Top 5)".
+      KPI 5 (Biggest movers) IN PROGRESS: built as a native SQL query (not the GUI notebook builder),
+      since Metabase's visual builder can only sort+limit in one direction per question, and this KPI
+      needs BOTH ends at once (top 5 climbers + top 5 fallers) for a diverging bar chart. Query is a
+      UNION ALL of two near-identical SELECTs (one ORDER BY rank_change DESC LIMIT 5, one ASC LIMIT 5),
+      each tagged with a `direction` column ('climber'/'faller') for color-coding; WHERE clause uses
+      `snapshot_date = (SELECT MAX(snapshot_date) ...)` so it stays correct as new days accumulate
+      rather than hardcoding a date. Tested directly in psql first, confirmed real variety (Tame Impala/
+      LE SSERAFIM/Zara Larsson/sombr/The Killers climbing; Ariana Grande/Arctic Monkeys/Taylor Swift/
+      Clairo falling) — much more varied than KPI 1/4 which are currently dominated by one album. Query
+      pasted into Metabase SQL editor, results confirmed matching. Still need: switch to bar chart
+      (X=track_artist, Y=rank_change — diverges naturally above/below zero since rank_change is signed),
+      apply green/red color coding by the `direction` column, then save.
+      KPI 2 not started.
 
 ### Phase 8 — Docs & demo
 
@@ -183,6 +210,16 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
 
 ### Session notes (free text — newest at top)
 
+- 2026-06-21: Continued Phase 7 KPI builds. Mac was asleep again at the 10:15am cron time (confirms
+  the conclusion from 6-20: this will keep happening occasionally, manual backfill via
+  run_daily_pipeline.sh is the accepted fallback). Ran `./run_daily_pipeline.sh 2026-06-21` — loaded
+  today cleanly, 24/24 tests passed with no new data-quality surprises this time. Now at 7 days / 2100
+  rows in fact_chart_entry_trends. Built KPI 3 (genre breakdown, saved), KPI 4 (trend over time, saved
+  — see session note below for the axis-flip lesson learned), and started KPI 5 (biggest movers) as a
+  hand-written SQL question (UNION of top-5-climbers + top-5-fallers) since Metabase's GUI builder
+  can't sort+limit in two directions in one question — see Phase 7 checklist above for full details on
+  all three. KPI 5 still needs the bar chart + color formatting step, then save. Next: finish KPI 5
+  visualization, then KPI 2 (global vs country), then assemble all 5 into an actual Metabase dashboard.
 - 2026-06-20: Phase 7 started + a real data-integrity bug found and fixed. Installed Docker, ran
   Metabase via Docker (persistent volume), connected it to local Postgres using host.docker.internal
   (containers can't reach the host via localhost) — all 9 tables visible in Metabase. Before building

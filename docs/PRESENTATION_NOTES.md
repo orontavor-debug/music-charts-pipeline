@@ -146,6 +146,41 @@ comparison between two specific rows, which needs a self-join. Decided to design
 as its own small dbt model once we're in Metabase and know the exact shape the chart
 needs, rather than guessing ahead of time.
 
+### A UX "fix" that backfired — flipping the rank axis on the trend chart
+Built KPI 4 (trend over time) as a line chart: X-axis = snapshot date, Y-axis = Rank,
+one line per track. Noticed the Y-axis reads against intuition — rank 1 (best) sits at
+the bottom, rank 10 (worst) at the top, so a line moving "up" is actually getting worse.
+Tried the obvious fix: a custom column `51 - Rank` ("Chart Score"), so climbing the
+chart moves the line up, matching normal trend-chart intuition. This backfired: once
+the chart was filtered to only the top 5 ranks, the transformed values only span a
+4-point range (46-50) crammed near the top of an implied 0-50 scale — all the actual
+movement got visually flattened, hiding the line crossings that were the whole point of
+the chart. Reverted to raw Rank, which auto-scales to its small natural range (1-5) and
+shows the crossings clearly. **Lesson, good for a presentation soundbite:** a UX
+improvement that's correct in the abstract can actively hurt readability once you've
+already narrowed the data — chose to keep the "technically backwards" axis and add a
+one-sentence verbal caveat ("lower rank = better") instead of distorting the data to fix
+a problem that, in this specific narrowed view, didn't actually exist.
+
+### Why KPI 5 (biggest movers) needed raw SQL instead of the GUI query builder
+KPI 5's design goal was a diverging bar chart showing the biggest CLIMBERS and biggest
+FALLERS together (like a stock market gainers/losers board), not just a one-directional
+top-N list. Metabase's visual query builder can only sort + limit a single result set in
+one direction per question (e.g. "top 5 by rank_change DESC" OR "bottom 5", not both at
+once). Solution: hand-write a native SQL question — two near-identical SELECTs (one
+`ORDER BY rank_change DESC LIMIT 5`, one `ORDER BY rank_change ASC LIMIT 5`) combined
+with `UNION ALL`, each tagged with a `direction` column ('climber'/'faller') used for
+color-coding the bars. Used `WHERE snapshot_date = (SELECT MAX(snapshot_date) ...)`
+instead of hardcoding a date, so the question keeps working correctly as more days
+accumulate. Tested directly in psql before pasting into Metabase, to separate "is the
+SQL logic correct" from "is Metabase configured correctly" — confirmed real, varied
+results (Tame Impala/LE SSERAFIM/Zara Larsson/sombr/The Killers climbing; Ariana Grande/
+Arctic Monkeys/Taylor Swift/Clairo falling), notably more diverse than KPI 1/4, which
+are currently dominated by a single album release. Worth knowing for interviews: this is
+a clean example of knowing when to drop from a GUI tool down to raw SQL — not because
+the GUI is bad, but because some queries (here, "top N from both ends of a sort")
+genuinely need a UNION, which visual query builders generally can't express.
+
 ---
 
 ## Hurdles encountered and how we solved them
@@ -242,6 +277,22 @@ Run automatically every time `pipeline.py` runs:
 ---
 
 ## Session log (newest first)
+
+### Session 12 — 2026-06-21 (Phase 7 continued: KPIs 3, 4, 5)
+Mac was asleep again at the 10:15am cron time — as expected per the decision in Session 11,
+just ran `./run_daily_pipeline.sh 2026-06-21` manually. Loaded cleanly, 24/24 tests passed
+with no new data-quality issues this time. Now at 7 days / 2,100 rows in
+fact_chart_entry_trends.
+- Built KPI 3 (genre breakdown by country) and KPI 4 (trend over time) in Metabase's visual
+  query builder — see "Why a UX fix backfired" design decision above for the interesting
+  part (the rank-axis-flip attempt on KPI 4 that made the chart worse, then got reverted).
+- Built KPI 5 (biggest movers) as a hand-written SQL question instead of the GUI builder —
+  see "Why KPI 5 needed raw SQL" design decision above for the full reasoning (GUI builder
+  can't sort two directions in one question; needed a UNION ALL of climbers + fallers).
+  Chart visualization (bar chart, color-coded by climber/faller) still in progress.
+- Next: finish KPI 5's bar chart formatting and save it, then design KPI 2 (global vs
+  country) now that we have a much clearer sense of what "compelling" looks like for this
+  dashboard, then assemble all 5 into one actual Metabase dashboard.
 
 ### Session 11 — 2026-06-20 (Phase 7 started: Metabase + a real data-integrity bug)
 Installed Docker, ran Metabase as a container (port 3000, persistent volume `metabase-data` so
