@@ -1,6 +1,7 @@
 venv/
 .env
 *.csv
+!music_charts/seeds/*.csv
 pipeline.log
 .DS_Store
 __pycache__/

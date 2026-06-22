@@ -1,0 +1,68 @@
+name: dbt tests
+
+on:
+  push:
+
+jobs:
+  dbt-test:
+    runs-on: ubuntu-latest
+
+    # A throwaway Postgres that exists only for this one run, inside GitHub's
+    # cloud runner. It has no connection to the local laptop or the real
+    # music_charts database — it's a fresh, empty database every time.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: music_charts_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt (pinned to match local versions)
+        run: pip install dbt-core==1.8.8 dbt-postgres==1.8.2
+
+      - name: Write dbt profile pointing at the CI Postgres only
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<EOF
+          music_charts:
+            target: ci
+            outputs:
+              ci:
+                type: postgres
+                host: localhost
+                port: 5432
+                user: postgres
+                pass: postgres
+                dbname: music_charts_ci
+                schema: public
+                threads: 1
+          EOF
+
+      - name: dbt seed (load the sample data fixture)
+        run: dbt seed
+        working-directory: music_charts
+
+      - name: dbt run (build the star schema)
+        run: dbt run
+        working-directory: music_charts
+
+      - name: dbt test (run all data-quality tests)
+        run: dbt test
+        working-directory: music_charts
