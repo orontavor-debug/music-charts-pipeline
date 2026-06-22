@@ -79,7 +79,8 @@ Priority order for remaining work:
 1. [x] dbt window functions (rank_change, biggest movers) — unblocks dashboard KPIs — DONE 2026-06-18
 2. [x] Phase 7 — Metabase dashboard (core deliverable, explicitly promised in project description) —
    DONE 2026-06-22. All 5 KPIs built and assembled into one dashboard.
-3. Phase 6 — GitHub Actions (dbt tests on push)
+3. [x] Phase 6 — GitHub Actions (dbt tests on push) — DONE 2026-06-22. Workflow ran successfully
+   first try (53s) on push to main.
 4. Phase 8 — docs, architecture diagram, demo script
 
 **Terraform (IaC) is a STRETCH goal, not in the original 8 phases.** Added only to close
@@ -153,7 +154,15 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
 
 ### Phase 6 — GitHub Actions
 
-- [ ] Workflow that runs dbt tests on push
+- [x] Workflow that runs dbt tests on push
+      .github/workflows/dbt-test.yml: on every push, spins up a throwaway Postgres service container
+      (fresh, empty, exists only for that run — no connection to local Postgres), writes a CI-only dbt
+      profile pointing at it, then runs dbt seed -> dbt run -> dbt test. Seed fixture
+      (music_charts/seeds/raw_chart_entries.csv) is one real clean day (2026-06-22, 300 rows) exported
+      from local Postgres, since CI has no AWS/Last.fm credentials to fetch live data — dbt seed creates
+      a table with the same name the staging model's source() already expects, so no model changes
+      needed. Added a .gitignore exception (!music_charts/seeds/*.csv) since the root *.csv rule was
+      catching this intentional fixture file. Ran successfully first try (53s) on push to main.
 
 ### Phase 7 — Dashboard (Metabase)
 
@@ -251,9 +260,15 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
   Date") via each question's Axes tab. Switched KPI 1 from vertical Bar to Row chart — long "Artist —
   Track" labels didn't fit even after resizing, and Row charts handle long category names as normal
   horizontal text instead of needing rotation. **This completes Phase 7 — all 5 KPIs built AND
-  assembled into one dashboard.** Per the Build order plan, steps 1-2 (window functions, Metabase) are
-  now both done; Phase 6 (GitHub Actions) is next, then Phase 8 (docs). Still on track for the July 1
-  checkpoint with room to spare — worth revisiting the Terraform stretch goal once Phase 6 is done.
+  assembled into one dashboard.** Continued straight into Phase 6 same session: built
+  .github/workflows/dbt-test.yml (throwaway Postgres service container + dbt seed/run/test on every
+  push — see Phase 6 checklist above for full detail), with a seed fixture exported from today's real
+  clean data since CI has no AWS/Last.fm credentials. Hit one snag: the seed CSV was caught by the root
+  .gitignore's `*.csv` rule (meant for pipeline output files, not this intentional fixture) — fixed
+  with a `!music_charts/seeds/*.csv` exception. Pushed to GitHub, workflow ran successfully on the
+  first try (53s). **This completes Phase 6.** Per the Build order plan, steps 1-3 (window functions,
+  Metabase, GitHub Actions) are now all done — only Phase 8 (docs/demo) remains before hitting the July
+  1 checkpoint, at which point Terraform becomes worth considering as the stretch goal.
 - 2026-06-21: Continued Phase 7 KPI builds. Mac was asleep again at the 10:15am cron time (confirms
   the conclusion from 6-20: this will keep happening occasionally, manual backfill via
   run_daily_pipeline.sh is the accepted fallback). Ran `./run_daily_pipeline.sh 2026-06-21` — loaded

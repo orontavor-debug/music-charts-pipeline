@@ -275,6 +275,46 @@ are the standard pattern for "Top 10" style rankings in real music-industry dash
 (Spotify, Billboard), so the long labels actually pointed toward the more idiomatic
 chart type for this specific KPI, not just a fix for a cosmetic problem.
 
+### Phase 6: CI tests against a seed fixture, not live data — and why that's the right call
+GitHub Actions runners can't reach the local Postgres database (no network path from
+GitHub's cloud back to a laptop), and they also don't have AWS or Last.fm credentials —
+so the workflow can't just "run the real pipeline" to get test data. Solution: a dbt
+**seed** — `music_charts/seeds/raw_chart_entries.csv`, one real, already-validated clean
+day (2026-06-22, 300 rows) exported directly from the local Postgres table and committed
+to the repo. The workflow spins up a throwaway Postgres "service container" (a fresh,
+empty database that exists only for that one CI run), loads the seed into it
+(`dbt seed`), builds the full star schema from it (`dbt run`), then runs all 24 tests
+(`dbt test`) — end to end, fully exercising the real dbt logic, without needing live
+credentials or touching production data at all.
+
+One subtlety worth being able to explain: a dbt seed creates a database table named
+after the CSV file. Naming it `raw_chart_entries.csv` means the resulting table has
+the exact same name our staging model's `source()` already expects — so this required
+**zero changes** to any existing dbt model. The CI environment is indistinguishable from
+production as far as the SQL is concerned; only how the raw table gets populated differs
+(seed vs. real pipeline). This is a clean illustration of why dbt's source/ref system is
+useful: models don't care where their input table came from, just that it exists with
+the right shape.
+
+**Safety note worth mentioning if asked:** before building this, deliberately did NOT
+test `dbt seed` locally against the real dev database — `dbt seed` creates/replaces a
+table with the seed's filename, and the local dev profile points at the same
+`music_charts` Postgres the real pipeline writes into. Running it locally would have
+overwritten 8 days of real accumulated data with a single 300-row sample. Verified the
+CSV's correctness by inspection instead, and let it get its first real run inside CI's
+isolated, disposable database — exactly the environment seeds are designed for.
+
+### Hurdle: the seed CSV got caught by an existing .gitignore rule
+The root `.gitignore` has a blanket `*.csv` rule, added early in the project to keep
+pipeline OUTPUT files (`charts_clean.csv` etc.) out of git. That same rule silently
+caught the new seed fixture too, since it's also a `.csv` file — `git add` reported it
+as ignored. Fixed with a targeted negation: `!music_charts/seeds/*.csv` directly below
+the blanket rule, which un-ignores just that one path while leaving the original rule
+intact for every other CSV in the project. Small thing, but a good reminder that
+broad `.gitignore` patterns can silently swallow new intentional files later in a
+project's life — worth a quick check whenever something "should be committed" isn't
+showing up in `git status`.
+
 ---
 
 ## Hurdles encountered and how we solved them
@@ -395,9 +435,16 @@ manually, 24/24 tests passed, now 8 days of data.
   the full story, including fixing 3 charts' raw join-path axis labels and switching KPI 1
   from a vertical bar to a row chart to fix long, cramped track/artist labels.
 - **Phase 7 is now fully complete** — all 5 KPIs built, polished, and assembled into one
-  dashboard. Per the settled build order, Phase 6 (GitHub Actions) is next, then Phase 8
-  (docs/demo). Possible future polish if time allows: a second dashboard tab for more
+  dashboard. Possible future polish if time allows: a second dashboard tab for more
   creative/exploratory views — not committed to, just an idea raised in conversation.
+- Continued straight into Phase 6 the same session: built a GitHub Actions workflow
+  (`.github/workflows/dbt-test.yml`) that runs `dbt seed -> dbt run -> dbt test` against a
+  throwaway Postgres service container on every push — see "Phase 6: CI tests against a
+  seed fixture" design decision above for the full reasoning, plus the .gitignore hurdle
+  it surfaced. Pushed to GitHub, workflow succeeded on the first try (53 seconds).
+  **Phase 6 is now also complete.** Per the settled build order, only Phase 8 (docs/demo)
+  remains before the July 1 checkpoint — at which point Terraform becomes worth
+  considering as the stretch goal.
 
 ### Session 11 — 2026-06-20 (Phase 7 started: Metabase + a real data-integrity bug)
 Installed Docker, ran Metabase as a container (port 3000, persistent volume `metabase-data` so
