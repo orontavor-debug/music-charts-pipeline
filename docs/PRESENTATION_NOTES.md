@@ -181,6 +181,76 @@ a clean example of knowing when to drop from a GUI tool down to raw SQL — not 
 the GUI is bad, but because some queries (here, "top N from both ends of a sort")
 genuinely need a UNION, which visual query builders generally can't express.
 
+### KPI 2 (global vs country): a self-join, and sorting for the interesting story
+This was the project's first SELF-JOIN: `fact_chart_entry` joined to itself, matched on
+`track_key` + `date_key` (same track, same day), with one side filtered to
+`chart_scope = 'global'` and the other to `chart_scope != 'global'`. Conceptually this
+answers "find the same track's row on two different charts on the same day" — a
+different shape of question from every other model in the project (which all join
+DIFFERENT tables together; this joins one table to itself to compare two of its own rows).
+
+The first version of this query sorted by global rank ascending (i.e. "show the country
+ranks of the top global tracks") — but since the global chart is currently dominated by
+one album (see KPI 1's Olivia Rodrigo note), that just repeated the same story a third
+time. **Changed the sort to `ORDER BY global_rank - country_rank DESC`** instead — this
+surfaces the BIGGEST gaps between a track's global and country rank, which produced a
+genuinely different and more interesting result: tracks that are barely-charting
+worldwide but quietly huge in one specific market (e.g. Malcolm Todd — "Sweet Boy",
+ranked #50 globally but #21 in the United States; The Killers' "Mr. Brightside" ranked
+#28 globally but #8 in Germany, presumably an older song still loved there specifically).
+**Presentation line:** "The interesting data wasn't in the obvious sort order — once I
+sorted for the outliers instead of the leaders, the dashboard told a completely
+different and more useful story." Good example of analysis, not just querying — the
+SQL syntax was easy; choosing what to ask for was the actual work.
+
+Mathematically worth noting: top-ranked global tracks can never show a large gap here,
+since their global rank is already near 1 and the gap is bounded by how much room is
+above them — a useful thing to be able to explain if asked "why isn't the #1 global
+track in this chart?"
+
+### KPI 2: choosing a scatter plot over a grouped bar chart
+PROJECT_PLAN.md's original spec suggested a grouped bar for this KPI (global rank bar
+next to country rank bar, per track). Built that version first, but reconsidered after
+direct feedback during the build ("again a bar chart?") — and on reflection, a scatter
+plot is actually the more correct visualization here, not just a different one: this
+KPI compares two PAIRED numbers (global rank, country rank) for the same entity, which
+is the textbook use case for a scatter plot (X = one value, Y = the other, each point's
+position directly shows the relationship) rather than two bars that have to be visually
+compared side by side. Final version: X-axis = Global Rank, Y-axis = Country Rank, one
+point per track/country pair. Reading the chart: every point sits well below the
+imaginary diagonal (where global rank = country rank), since the underlying query
+already selected for the biggest such gaps — that visual gap IS the story.
+
+### KPI 2: a color-coding tradeoff — when a "cleaner" fix is the wrong fix
+With 10 distinct points needing 10 distinct colors, Metabase's default palette ran out
+and started repeating (3 colliding pairs, e.g. two different tracks both rendered blue).
+First fix attempted: switch the series breakout from per-track to per-COUNTRY — since
+the 10 points only span 4 countries, this technically eliminated the collision entirely
+(4 colors needed, palette easily covers that). But it made the chart **worse**: KPI 2's
+whole point is specific surprising TRACKS (Malcolm Todd, Sabrina Carpenter, etc.), and
+coloring by country shifted the visual story toward country clustering instead, while
+also removing per-track identification from the legend — a real loss on a static
+presentation slide where hovering for a tooltip isn't possible. Reverted, and instead
+manually reassigned colors on just the 3 colliding pairs via Metabase's color picker
+(the palette had ~16 usable colors across a light/dark row, more than enough for 10 —
+the problem was never a true shortage, just an automatic assignment that didn't check
+for duplicates). **Lesson, good for a presentation soundbite:** the technically simpler
+fix (fewer colors needed) wasn't the right fix, because it solved the rendering problem
+while breaking the chart's actual communication goal — worth always asking "does this
+fix solve the technical bug, or does it also still tell the story I need it to tell?"
+
+### Why KPI 2 ended up as a Metabase SQL question, not a dbt model
+Back in Phase 5, we deliberately deferred deciding whether "global vs country" needed
+its own dbt model or could be a direct query, until we actually knew the shape Metabase
+needed (see "Why a single fact table grain works for most KPIs" above). Now resolved:
+it's a Metabase-only native SQL question, not a dbt model. Reasoning: this comparison is
+purely a presentation-layer concern (how do we SHOW the data) rather than a reusable
+transformation other parts of the project depend on — nothing else needs "global rank
+vs country rank" as an intermediate table, so promoting it into dbt would have added a
+model with exactly one consumer. Good general rule worth stating in interviews: build a
+dbt model when multiple things need the same transformed data; write it directly in the
+BI tool when only one chart needs that exact shape.
+
 ---
 
 ## Hurdles encountered and how we solved them
@@ -278,21 +348,26 @@ Run automatically every time `pipeline.py` runs:
 
 ## Session log (newest first)
 
-### Session 12 — 2026-06-21 (Phase 7 continued: KPIs 3, 4, 5)
-Mac was asleep again at the 10:15am cron time — as expected per the decision in Session 11,
-just ran `./run_daily_pipeline.sh 2026-06-21` manually. Loaded cleanly, 24/24 tests passed
-with no new data-quality issues this time. Now at 7 days / 2,100 rows in
-fact_chart_entry_trends.
-- Built KPI 3 (genre breakdown by country) and KPI 4 (trend over time) in Metabase's visual
-  query builder — see "Why a UX fix backfired" design decision above for the interesting
-  part (the rank-axis-flip attempt on KPI 4 that made the chart worse, then got reverted).
-- Built KPI 5 (biggest movers) as a hand-written SQL question instead of the GUI builder —
-  see "Why KPI 5 needed raw SQL" design decision above for the full reasoning (GUI builder
-  can't sort two directions in one question; needed a UNION ALL of climbers + fallers).
-  Chart visualization (bar chart, color-coded by climber/faller) still in progress.
-- Next: finish KPI 5's bar chart formatting and save it, then design KPI 2 (global vs
-  country) now that we have a much clearer sense of what "compelling" looks like for this
-  dashboard, then assemble all 5 into one actual Metabase dashboard.
+### Session 13 — 2026-06-22 (Phase 7 complete: KPI 5 finished, KPI 2 built — all 5 KPIs done)
+Mac was asleep again at the 10:15am cron time (3rd day in a row — the accepted fallback
+pattern from Session 11 continues to hold up fine). Ran `./run_daily_pipeline.sh 2026-06-22`
+manually, 24/24 tests passed, now 8 days of data.
+- Finished KPI 5: switched to bar chart, X=track_artist, Y=rank_change, color breakout by
+  the `direction` column, enabled "show values on data points" so each bar displays its
+  exact +/- number directly. Saved as "KPI 5 - Biggest Movers (Climbers & Fallers, Global)".
+- Built KPI 2 (global vs country) entirely from scratch — see the three new design-decision
+  entries above ("KPI 2: a self-join...", "KPI 2: choosing a scatter plot...", "KPI 2: a
+  color-coding tradeoff...") for the full story. Short version: first self-join in the
+  project; deliberately sorted for the biggest global/country rank mismatches instead of
+  the obvious sort order, which surfaced a genuinely good story (regional hits like
+  Malcolm Todd); switched from grouped bar to scatter plot as a better-fit chart type;
+  worked through a real color-collision tradeoff (technically-simpler fix vs. the fix that
+  actually preserved the chart's story) and landed on manually fixing 3 color pairs.
+  Saved as "KPI 2 - Global vs Country (Biggest Regional Hits)".
+- **All 5 KPIs are now built and saved as individual Metabase questions.** This closes out
+  the chart-building part of Phase 7.
+- Next: assemble all 5 saved questions into one actual Metabase dashboard — this hasn't
+  been done yet, they currently exist only as separate saved questions.
 
 ### Session 11 — 2026-06-20 (Phase 7 started: Metabase + a real data-integrity bug)
 Installed Docker, ran Metabase as a container (port 3000, persistent volume `metabase-data` so

@@ -163,7 +163,7 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
       Container `metabase` running via docker run, persistent volume `metabase-data` so dashboards
       survive restarts. Connected to local Postgres using host.docker.internal:5432/music_charts
       (containers can't reach the host via localhost). All 9 tables visible in Metabase's data browser.
-- [~] Build the 5 KPIs
+- [x] Build the 5 KPIs
       KPI 1 (Top Tracks Now - Global) DONE: bar chart, joins fact_chart_entry -> dim_track/dim_artist/
       dim_country/dim_date, filtered to chart_scope=global + snapshot_date=today, sorted by rank asc,
       limit 10. Custom column concat(Artist Name, " — ", Track Name) used as X-axis label since neither
@@ -187,19 +187,32 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
       solves a problem in the abstract can hurt readability once the data range is already narrow — kept
       raw Rank, added a verbal caveat instead ("lower = better") rather than transforming the data.
       Saved as "KPI 4 - Trend Over Time (Global Top 5)".
-      KPI 5 (Biggest movers) IN PROGRESS: built as a native SQL query (not the GUI notebook builder),
-      since Metabase's visual builder can only sort+limit in one direction per question, and this KPI
-      needs BOTH ends at once (top 5 climbers + top 5 fallers) for a diverging bar chart. Query is a
-      UNION ALL of two near-identical SELECTs (one ORDER BY rank_change DESC LIMIT 5, one ASC LIMIT 5),
-      each tagged with a `direction` column ('climber'/'faller') for color-coding; WHERE clause uses
+      KPI 5 (Biggest movers) DONE: native SQL query (not the GUI notebook builder), since Metabase's
+      visual builder can only sort+limit in one direction per question, and this KPI needs BOTH ends at
+      once (top 5 climbers + top 5 fallers) for a diverging bar chart. Query is a UNION ALL of two
+      near-identical SELECTs (one ORDER BY rank_change DESC LIMIT 5, one ASC LIMIT 5), each tagged with
+      a `direction` column ('climber'/'faller') for color-coding; WHERE clause uses
       `snapshot_date = (SELECT MAX(snapshot_date) ...)` so it stays correct as new days accumulate
-      rather than hardcoding a date. Tested directly in psql first, confirmed real variety (Tame Impala/
-      LE SSERAFIM/Zara Larsson/sombr/The Killers climbing; Ariana Grande/Arctic Monkeys/Taylor Swift/
-      Clairo falling) — much more varied than KPI 1/4 which are currently dominated by one album. Query
-      pasted into Metabase SQL editor, results confirmed matching. Still need: switch to bar chart
-      (X=track_artist, Y=rank_change — diverges naturally above/below zero since rank_change is signed),
-      apply green/red color coding by the `direction` column, then save.
-      KPI 2 not started.
+      rather than hardcoding a date. Bar chart, X=track_artist, Y=rank_change (diverges naturally above/
+      below zero since rank_change is signed), color breakout by `direction`, "show values on data
+      points" enabled so each bar displays its exact +/- number. Saved as "KPI 5 - Biggest Movers
+      (Climbers & Fallers, Global)".
+      KPI 2 (Global vs country) DONE: also native SQL — first KPI needing a self-join (fact_chart_entry
+      joined to itself on track_key + date_key, one side filtered to chart_scope='global', the other to
+      chart_scope!='global'). Deliberately sorted by `global_rank - country_rank DESC LIMIT 10` to
+      surface the BIGGEST mismatches (regional hits hiding inside the data, e.g. Malcolm Todd ranked #50
+      globally but #21 in the US) rather than just showing top-global-tracks' country ranks again, which
+      would've just repeated the Olivia Rodrigo story from KPI 1/4. Visualized as a scatter plot
+      (X=Global Rank, Y=Country Rank) instead of a grouped bar — better fit since this is fundamentally
+      a paired-value comparison, and explicitly chosen over bars after direct user feedback ("again a
+      bar chart?"). Color-by-track-name caused palette collisions (10 series, ~8-color palette) — tried
+      switching the breakout to Country instead (only 4 distinct values, no collisions) but reverted
+      after user feedback that it diluted the actual story (individual surprising tracks) in favor of an
+      uninteresting country clustering, and broke per-track identification on a static slide. Final fix:
+      kept the per-track breakout, manually reassigned colors on the 3 colliding pairs via Metabase's
+      color picker. Saved as "KPI 2 - Global vs Country (Biggest Regional Hits)". Note: built directly
+      as a Metabase SQL question, not a dedicated dbt model — resolved the open question from the
+      Phase 5 design discussion in favor of "Metabase query," now that we know the exact shape needed.
 
 ### Phase 8 — Docs & demo
 
@@ -210,6 +223,20 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
 
 ### Session notes (free text — newest at top)
 
+- 2026-06-22: All 5 KPIs complete — Phase 7 dashboard-building (the charts themselves) is done. Backfilled
+  today's data first (same cron-asleep pattern as the last 2 days; run_daily_pipeline.sh handled it
+  cleanly, 24/24 tests, now 8 days of data). Finished KPI 5 (bar chart, color by direction, "show values
+  on data points" for exact numbers on each bar) and built KPI 2 (global vs country) from scratch — see
+  Phase 7 checklist above for full detail. KPI 2 highlights: first self-join in the project
+  (fact_chart_entry joined to itself on track_key+date_key to compare global vs country rank for the
+  same track/day); deliberately sorted for the BIGGEST mismatches instead of top-global-tracks, which
+  surfaced a much better story (hidden regional hits like Malcolm Todd — #50 globally, #21 in the US);
+  switched from a grouped bar to a scatter plot after direct pushback ("again a bar chart?") since
+  scatter is the more correct visualization for a paired-value comparison anyway; tried a country-based
+  color breakout to fix a palette collision, reverted after feedback that it diluted the actual story —
+  ended up manually fixing only the 3 colliding color pairs instead. Next: assemble all 5 saved
+  questions into one actual Metabase dashboard (this hasn't been done yet — KPIs exist as separate saved
+  questions, not yet combined into a single dashboard view).
 - 2026-06-21: Continued Phase 7 KPI builds. Mac was asleep again at the 10:15am cron time (confirms
   the conclusion from 6-20: this will keep happening occasionally, manual backfill via
   run_daily_pipeline.sh is the accepted fallback). Ran `./run_daily_pipeline.sh 2026-06-21` — loaded
