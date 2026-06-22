@@ -251,6 +251,30 @@ model with exactly one consumer. Good general rule worth stating in interviews: 
 dbt model when multiple things need the same transformed data; write it directly in the
 BI tool when only one chart needs that exact shape.
 
+### Assembling the dashboard: one tab, and a chart-type swap driven by real data
+Combined all 5 saved questions into a single Metabase dashboard, one tab (not multiple)
+— with only 5 charts, one scrollable page is easier to present from than clicking
+between tabs, and there isn't enough distinct content yet to justify splitting. Laid out
+as a 2-column grid for 4 of the charts, with KPI 3 (genre breakdown, 24+ genre
+categories) widened to the full dashboard width — it needed more horizontal room than
+half-width gave it.
+
+While assembling, found that 3 charts were displaying raw Postgres join-path strings as
+their axis titles (e.g. "Dim Date - Date Key → Snapshot Date" instead of just "Snapshot
+Date") — these default to the literal joined-column path unless you override them, easy
+to miss when building one question at a time but obvious once everything sits together
+on one dashboard. Fixed via each question's Axes tab settings.
+
+KPI 1 also needed a genuine chart-type change at this stage, not just a label fix: its
+X-axis labels ("Artist — Track", e.g. "Olivia Rodrigo — drop dead") were long enough
+that even enlarging the card still left them cramped and rotated. Switched from a
+vertical Bar chart to a **Row chart** (horizontal bars) — track names now read as normal
+left-aligned text instead of needing rotation, and bars extend rightward by playcount.
+**Presentation line:** this isn't just a workaround — horizontal row/leaderboard charts
+are the standard pattern for "Top 10" style rankings in real music-industry dashboards
+(Spotify, Billboard), so the long labels actually pointed toward the more idiomatic
+chart type for this specific KPI, not just a fix for a cosmetic problem.
+
 ---
 
 ## Hurdles encountered and how we solved them
@@ -366,8 +390,14 @@ manually, 24/24 tests passed, now 8 days of data.
   Saved as "KPI 2 - Global vs Country (Biggest Regional Hits)".
 - **All 5 KPIs are now built and saved as individual Metabase questions.** This closes out
   the chart-building part of Phase 7.
-- Next: assemble all 5 saved questions into one actual Metabase dashboard — this hasn't
-  been done yet, they currently exist only as separate saved questions.
+- Assembled all 5 into one Metabase dashboard (single tab, ordered KPI 1 -> 4 -> 5 -> 2 -> 3,
+  KPI 3 widened to full width) — see "Assembling the dashboard" design decision above for
+  the full story, including fixing 3 charts' raw join-path axis labels and switching KPI 1
+  from a vertical bar to a row chart to fix long, cramped track/artist labels.
+- **Phase 7 is now fully complete** — all 5 KPIs built, polished, and assembled into one
+  dashboard. Per the settled build order, Phase 6 (GitHub Actions) is next, then Phase 8
+  (docs/demo). Possible future polish if time allows: a second dashboard tab for more
+  creative/exploratory views — not committed to, just an idea raised in conversation.
 
 ### Session 11 — 2026-06-20 (Phase 7 started: Metabase + a real data-integrity bug)
 Installed Docker, ran Metabase as a container (port 3000, persistent volume `metabase-data` so

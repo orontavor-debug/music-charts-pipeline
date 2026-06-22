@@ -77,10 +77,8 @@ of July, leaving ~1 week for rehearsal/polish before the 10th.
 
 Priority order for remaining work:
 1. [x] dbt window functions (rank_change, biggest movers) — unblocks dashboard KPIs — DONE 2026-06-18
-2. Phase 7 — Metabase dashboard (core deliverable, explicitly promised in project description)
-   Note: KPI #2 "Global vs country" (same track's rank globally vs. a country chart, same day) is a
-   separate comparison from rank_change (same chart, different day) — decide at Phase 7 whether it
-   needs its own dbt model or can be a direct Metabase query against fact_chart_entry.
+2. [x] Phase 7 — Metabase dashboard (core deliverable, explicitly promised in project description) —
+   DONE 2026-06-22. All 5 KPIs built and assembled into one dashboard.
 3. Phase 6 — GitHub Actions (dbt tests on push)
 4. Phase 8 — docs, architecture diagram, demo script
 
@@ -213,6 +211,18 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
       color picker. Saved as "KPI 2 - Global vs Country (Biggest Regional Hits)". Note: built directly
       as a Metabase SQL question, not a dedicated dbt model — resolved the open question from the
       Phase 5 design discussion in favor of "Metabase query," now that we know the exact shape needed.
+- [x] Assemble all 5 KPIs into one Metabase dashboard
+      Single tab (5 charts is a manageable amount for one scrollable page; multiple tabs add presentation
+      friction without enough content to justify it). Order: KPI 1 (headline overview) -> KPI 4 (trend) ->
+      KPI 5 (star KPI per project plan) -> KPI 2 (most surprising story) -> KPI 3 (supporting context).
+      Layout: 2-column grid for KPI 1/4/5/2, KPI 3 widened to full width (24+ genre categories needed
+      more horizontal room than half-width gave it). Polish pass: 3 charts (KPI 1, 4, 3) were showing raw
+      Postgres join-path labels as axis titles (e.g. "Dim Genre - Genre Key → Genre" instead of "Genre")
+      — fixed via each question's Axes tab. KPI 1 switched from vertical Bar to Row chart (horizontal
+      bars) after long "Artist — Track" labels didn't fit even after resizing the card — row charts put
+      long category names as normal left-aligned text instead of needing rotation, and are arguably the
+      more idiomatic chart type for a "Top 10" leaderboard anyway. Possible future polish (not committed
+      to, only if time allows): a second dashboard tab for more creative/exploratory views.
 
 ### Phase 8 — Docs & demo
 
@@ -234,9 +244,16 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
   switched from a grouped bar to a scatter plot after direct pushback ("again a bar chart?") since
   scatter is the more correct visualization for a paired-value comparison anyway; tried a country-based
   color breakout to fix a palette collision, reverted after feedback that it diluted the actual story —
-  ended up manually fixing only the 3 colliding color pairs instead. Next: assemble all 5 saved
-  questions into one actual Metabase dashboard (this hasn't been done yet — KPIs exist as separate saved
-  questions, not yet combined into a single dashboard view).
+  ended up manually fixing only the 3 colliding color pairs instead. Assembled all 5 into one Metabase
+  dashboard (single tab, 2-column grid, KPI 3 widened to full width for its 24+ genre categories) — see
+  Phase 7 checklist above for the full layout/polish details. Fixed 3 charts showing raw Postgres
+  join-path labels as axis titles (e.g. "Dim Date - Date Key → Snapshot Date" instead of "Snapshot
+  Date") via each question's Axes tab. Switched KPI 1 from vertical Bar to Row chart — long "Artist —
+  Track" labels didn't fit even after resizing, and Row charts handle long category names as normal
+  horizontal text instead of needing rotation. **This completes Phase 7 — all 5 KPIs built AND
+  assembled into one dashboard.** Per the Build order plan, steps 1-2 (window functions, Metabase) are
+  now both done; Phase 6 (GitHub Actions) is next, then Phase 8 (docs). Still on track for the July 1
+  checkpoint with room to spare — worth revisiting the Terraform stretch goal once Phase 6 is done.
 - 2026-06-21: Continued Phase 7 KPI builds. Mac was asleep again at the 10:15am cron time (confirms
   the conclusion from 6-20: this will keep happening occasionally, manual backfill via
   run_daily_pipeline.sh is the accepted fallback). Ran `./run_daily_pipeline.sh 2026-06-21` — loaded
