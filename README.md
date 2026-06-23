@@ -22,24 +22,62 @@ Fetches the Last.fm global chart and top charts for the United States, United Ki
 
 ## Pipeline architecture
 
-```
-Last.fm API ──┐
-              ├──► Glue Job #1 (fetch) ──► S3 raw/
-MusicBrainz ──┘         │
-                         ▼
-                  Glue Job #2 (enrich) ──► S3 clean/
-                         │
-                    Step Functions
-                    (daily 8am CET)
-                         │
-                  local loader script ──► Postgres ──► dbt ──► Metabase
-```
+![Architecture diagram](docs/architecture.png)
 
 ## Data collected
 
 - 300 rows per daily snapshot (50 tracks × 6 charts)
 - Global chart + United States, United Kingdom, Germany, Brazil, Japan
 - Fields: track name, artist, rank, genre, playcount, listeners, artist origin country, artist type, artist gender, formation year
+
+## How to run it
+
+This is the quickest path to seeing the project work end to end — fetch one day of data,
+load it, build the star schema, and view it in Metabase. It doesn't require AWS access;
+the cloud deployment (Glue + Step Functions + EventBridge) runs automatically in the
+author's AWS account and is documented separately in `docs/PROJECT_PLAN.md`.
+
+**Prerequisites:** Python 3.10+, a local PostgreSQL instance, Docker, and a free
+[Last.fm API key](https://www.last.fm/api/account/create).
+
+**1. Setup**
+```bash
+git clone <this repo>
+cd music-charts-pipeline
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+Create a `.env` file in the project root with `LASTFM_API_KEY=your_key_here`, and create
+a local Postgres database named `music_charts`.
+
+**2. Fetch, enrich, and load one day of data**
+```bash
+python pipeline.py
+python -c "from load_to_postgres import load; load()"
+```
+This fetches the global chart + 5 country charts, enriches with genre (Last.fm tags) and
+artist metadata (MusicBrainz), runs data-quality checks, and loads the result into the
+`raw_chart_entries` table in Postgres.
+
+**3. Build the star schema with dbt**
+```bash
+cd music_charts
+dbt run
+dbt test
+```
+
+**4. View the dashboard**
+```bash
+docker run -d -p 3000:3000 --name metabase -v metabase-data:/metabase-data metabase/metabase
+```
+Open `http://localhost:3000`, connect to Postgres using host `host.docker.internal`
+(not `localhost` — Docker containers can't reach the host machine that way) and database
+`music_charts`, then explore the dimension/fact tables or rebuild the 5 KPI questions.
+
+## Dashboard
+
+![Music Charts Dashboard — 5 KPIs in Metabase](docs/screenshots/Dashboard.png)
 
 ## Project status
 
@@ -49,7 +87,7 @@ MusicBrainz ──┘         │
 - ✅ Phase 2b — MusicBrainz artist enrichment
 - ✅ Phase 3 — AWS Glue cloud ingestion
 - ✅ Phase 4 — Step Functions orchestration + notifications
-- 🔄 Phase 5 — dbt star schema
-- ⬜ Phase 6 — GitHub Actions CI/CD
-- ⬜ Phase 7 — Metabase dashboard
-- ⬜ Phase 8 — Docs & demo
+- ✅ Phase 5 — dbt star schema (5 dimensions + fact table, window functions, 24 tests)
+- ✅ Phase 6 — GitHub Actions CI/CD (dbt tests run on every push)
+- ✅ Phase 7 — Metabase dashboard (5 KPIs)
+- 🔄 Phase 8 — Docs & demo

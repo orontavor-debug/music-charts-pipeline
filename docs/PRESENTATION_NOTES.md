@@ -410,6 +410,75 @@ Run automatically every time `pipeline.py` runs:
 
 ---
 
+## Future work: migrating to Snowflake (reasoning, not implemented)
+
+Not deployed in this project — but worth being able to reason through clearly in a
+presentation or interview, since it shows the difference between "I copied a tutorial"
+and "I understand WHY this architecture is portable."
+
+### Why Snowflake isn't the primary warehouse here
+Decided at the very start of the project (see "Why local Postgres instead of Snowflake?"
+above): Snowflake's free trial is 30 days, this project runs across roughly 4 weeks, and
+the trial would risk expiring before the presentation. Postgres is free forever, already
+installed, and has zero clock risk — the correct call for a project with a hard deadline,
+not a sign that Snowflake wasn't considered.
+
+### What WOULD need to change
+1. **Ingestion** — today, a local Python script (`load_to_postgres.py`) pulls the clean
+   CSV down from S3 and writes it into Postgres row-by-row via pandas `to_sql()`. This
+   exists specifically because AWS can't reach a laptop's local Postgres. Snowflake
+   removes that constraint entirely: it can read directly from S3 via an **external
+   stage** (`CREATE STAGE ... URL='s3://...'`) and load with `COPY INTO`, fully inside
+   AWS/Snowflake's cloud — no local bridge script, no cron job, no "was the Mac asleep"
+   problem at all. This is arguably the single biggest operational win Snowflake would
+   bring to this specific project, bigger than anything about the warehouse itself.
+2. **dbt target** — `~/.dbt/profiles.yml` already has a separate Snowflake profile
+   (`sf_dbt_project`) scaffolded from early project setup, never used since. Switching
+   over means pointing `dbt_project.yml`'s `profile:` field at it (or running dbt with
+   `--profile sf_dbt_project`) instead of the current `music_charts`/Postgres profile —
+   a connection-config change, not a code change. The model files themselves (staging,
+   5 dimensions, fact, fact_trends) would not need to change at all — both warehouses
+   understand standard ANSI SQL, `JOIN`, `GROUP BY`, window functions, and `MD5()`. This
+   is dbt's actual value proposition, demonstrated rather
+   than just claimed: **the transformation logic is the portable part.**
+3. **Metabase connection** — point Metabase at the Snowflake account instead of (or
+   alongside) Postgres. Since dbt would build identically-named, identically-shaped
+   tables, the 5 saved KPI questions would very likely work unchanged — they query
+   tables by name and column, not by warehouse-specific syntax (the two hand-written SQL
+   questions, KPI 2 and KPI 5, use only standard SQL — `UNION ALL`, string concatenation,
+   subqueries — nothing Postgres-specific that Snowflake doesn't also support).
+
+### What would NOT need to change
+The entire `models/` directory — sources.yml, staging, all 5 dimensions, the fact table,
+the window-function trends model, and all 24 tests. This is the concrete proof of
+"warehouse-agnostic dbt project": the modeling layer was built without ever depending on
+a Postgres-specific feature, so it travels to a new warehouse for free.
+
+### Why you'd actually want Snowflake at real scale (honest tradeoffs)
+Worth being honest in a presentation rather than overselling it: at this project's
+current scale (300 rows/day, single user, one laptop), Postgres is not just "the
+risk-managed choice," it's also genuinely the *simpler and cheaper* one — Snowflake's
+strengths don't show much value yet. They would matter if the project grew:
+- **Separation of storage and compute** — Snowflake scales query compute independently
+  of stored data, and you only pay for compute while actively querying. Useful once
+  the dataset or query concurrency grows; irrelevant at 300 rows/day.
+- **Built for concurrent analytical load** — multiple analysts/dashboards querying at
+  once without contention, which a single small Postgres instance would eventually
+  struggle with but this project never approaches.
+- **Native cloud ingestion** (the external-stage point above) — removes the local
+  cron/bridge-script fragility class of problem entirely, which is a real, demonstrated
+  pain point in THIS project (the repeated "Mac was asleep" issue).
+- **Time travel / zero-copy cloning** — built-in point-in-time recovery and cheap dataset
+  cloning for testing, neither of which this project currently needs but both genuinely
+  useful for a team environment.
+
+**One-sentence summary for a slide:** "The dbt layer was built warehouse-agnostic from
+day one — moving to Snowflake would mean changing the ingestion path and the connection
+profile, not rewriting a single model; we chose Postgres for this project specifically
+to avoid trial-expiry risk before the deadline, not because Snowflake doesn't fit."
+
+---
+
 ## Session log (newest first)
 
 ### Session 13 — 2026-06-22 (Phase 7 complete: KPI 5 finished, KPI 2 built — all 5 KPIs done)
