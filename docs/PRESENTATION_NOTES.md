@@ -315,6 +315,29 @@ broad `.gitignore` patterns can silently swallow new intentional files later in 
 project's life — worth a quick check whenever something "should be committed" isn't
 showing up in `git status`.
 
+### Choosing the right tool for the architecture diagram (AI generation vs. real icon libraries)
+Tried three approaches before landing on the final one, and the progression itself is a
+good example of matching the tool to the actual requirement rather than reaching for
+"AI-generate it" by default. (1) Lucid's built-in AI diagram generator, prompted with a
+detailed text description — produced a messy result: no AWS icons despite asking, no
+color-coding, stray meaningless "Start/End" nodes from a generic flowchart template, and
+a logically wrong arrow looping GitHub Actions back into the main data pipeline (it
+doesn't — CI runs against its own throwaway database). (2) Mermaid, via mermaid-cli —
+rendered cleanly on the first try with zero ambiguity (since it's deterministic text-to-
+diagram, not AI guessing at a layout), and free, with the bonus that GitHub renders
+Mermaid natively inside README.md. Good enough for a quick technical diagram, but
+visually plain — no real service icons, just labeled boxes. (3) draw.io with the
+official AWS icon shape library, built manually by hand, matching the visual style of a
+bootcamp-provided example that used real AWS/Docker/Snowflake icons. **The deciding
+insight:** generative AI tools (whether Lucid's AI box or Claude's own diagram/image
+generation) are fundamentally bad at *precisely* placing official, exact icon sets and
+exact technical labels — that's not really an "image generation" problem, it's an "asset
+placement" problem, which is what dedicated diagramming tools with built-in icon
+libraries are actually built for. **Presentation line:** "I tried the AI-generation
+shortcut first, recognized its output didn't match the actual requirement, and switched
+to a tool built for the job instead of trying to prompt-engineer my way around a
+fundamental limitation."
+
 ---
 
 ## Hurdles encountered and how we solved them
@@ -391,6 +414,21 @@ wake a sleeping machine — a skipped run leaves absolutely no trace (no log lin
 not worth the effort/risk this close to the deadline. The cloud pipeline's SNS email notification
 already confirms every day when fresh data is sitting in S3, so a missed local sync is easy to
 spot and fix with a quick manual backfill, which is itself now a single command (see below).
+
+### Hurdle: laptop fully powered off left a stale Postgres lock file
+A different failure mode from the usual "Mac was asleep" cron issue — this time the
+machine was fully **off**, and on power-up Postgres itself wasn't running. Diagnosed via
+`brew services list`, which showed `postgresql@16` in an `error` state. Tried starting it
+directly with `pg_ctl start`, which surfaced the real cause: `FATAL: lock file
+"postmaster.pid" already exists`, referencing a PID that supposedly belonged to the old
+postmaster process. Verified the lock was genuinely stale (not a real running conflict)
+by checking what process actually owned that PID — `ps -p <pid>` showed it belonged to
+an unrelated macOS system process, not Postgres, since PIDs get reused after a reboot.
+Safe to delete the stale lock file and restart cleanly: `rm postmaster.pid` then
+`brew services start postgresql@16`. Verified no data corruption afterward (row counts
+matched expectations) before resuming normal work. **Presentation line:** "An unclean
+shutdown left a stale process lock, not corrupted data — verified that distinction
+before touching anything, rather than assuming the worst and reaching for a restore."
 
 ### Hurdle: country charts missing playcount
 The `geo.getTopTracks` endpoint doesn't always return `playcount`. Our code crashed
@@ -480,6 +518,40 @@ to avoid trial-expiry risk before the deadline, not because Snowflake doesn't fi
 ---
 
 ## Session log (newest first)
+
+### Session 14 — 2026-06-23 (Phase 8: README + architecture diagram done)
+Laptop was fully powered off (not just asleep) — a new failure mode, see "Hurdle: laptop
+fully powered off left a stale Postgres lock file" above. Resolved it, confirmed no data
+corruption, backfilled the day — 24/24 tests, now 9 days of data.
+- Finished the README: fixed a stale project-status table (was showing Phase 5/6/7 as
+  in-progress/not-started when they were actually all done), added a real "How to run
+  it" section (local-only quick start, no AWS account needed), added the Metabase
+  dashboard screenshot.
+- Built the architecture diagram — see "Choosing the right tool for the architecture
+  diagram" design decision above for the full story of trying 3 different approaches
+  (Lucid AI generation, Mermaid, draw.io) before landing on draw.io with real AWS icons,
+  matching a bootcamp-provided example's visual style. Built it manually, icon by icon,
+  with several small draw.io technique fixes along the way (label positioning below
+  icons instead of overlapping, word-wrap for long labels, rubber-band selection to move
+  grouped shapes, exporting with "Selection Only" instead of the whole oversized page).
+  Saved as `docs/architecture.png`, wired into the README, removed the now-unused
+  Mermaid source file.
+- **This completes the README and architecture diagram portions of Phase 8.** Remaining:
+  demo script and future-work note — both writing/presentation-prep, not engineering.
+- Confirmed with the user that the project is technically complete from an engineering
+  standpoint: all of Phases 0-7 are built, working, and verified (24 dbt tests passing,
+  CI green, 5-KPI dashboard assembled). Nothing functionally missing.
+- Revisited Terraform timing now that the user is ahead of their own July 1 checkpoint —
+  recommended attempting it now (low remaining risk, comfortable time buffer), sequenced
+  as: future-work note (quick) -> Terraform -> demo script (written last, once Terraform's
+  outcome — success or "ran out of time" — is actually known).
+- New idea raised for later: a Metabase dashboard date filter so KPI 1 and KPI 3 (today-
+  only currently) can show past days too. Confirmed feasible with no new SQL/dbt work for
+  the 2 GUI-built KPIs; the 2 SQL-based KPIs (2 and 5) would need a `{{date_filter}}`
+  template variable added if extended there as well. Not started — queued for later.
+- Session ended before starting the future-work note. Next: future-work note, then
+  Terraform (`terraform import` against existing AWS resources, never recreating them),
+  then the dashboard date-filter enhancement, then the demo script last.
 
 ### Session 13 — 2026-06-22 (Phase 7 complete: KPI 5 finished, KPI 2 built — all 5 KPIs done)
 Mac was asleep again at the 10:15am cron time (3rd day in a row — the accepted fallback

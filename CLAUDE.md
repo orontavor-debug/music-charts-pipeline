@@ -235,13 +235,57 @@ skip it entirely and spend the remaining time on rehearsal/polish instead.
 
 ### Phase 8 — Docs & demo
 
-- [ ] Finish README (what/why/how + run instructions + screenshots)
-- [ ] 1-page architecture diagram
+- [x] Finish README (what/why/how + run instructions + screenshots)
+      Updated stale project status table (Phase 5/6/7 were showing as in-progress/not-started, now
+      correctly marked done). Added a real "How to run it" section: local-only quick-start path
+      (pipeline.py -> load() -> dbt run/test -> Metabase via Docker), no AWS needed. Added the
+      Metabase dashboard screenshot (docs/screenshots/Dashboard.png).
+- [x] 1-page architecture diagram
+      docs/architecture.png. First tried Lucid's AI-prompt diagram generator — messy result (no AWS
+      icons despite asking, no color-coding, stray Start/End nodes, a nonsensical arrow looping
+      GitHub Actions back into the main pipeline). Tried Mermaid next (free, and GitHub renders it
+      natively) — rendered cleanly via mermaid-cli on the first try, compared TD vs LR orientation,
+      TD read much better. Then the user shared a bootcamp-provided example diagram using real AWS
+      service icons in a grouped-container style and wanted something visually matching it — pivoted
+      to draw.io (free, has the official AWS18 icon shape library built in). Built it manually,
+      step by step: title, "AWS Cloud" and "Local Environment" containers with top-left labels,
+      AWS icons (EventBridge, Step Functions, 2x Glue, 2x S3, Lambda, SNS) each fixed to put the
+      label below the icon and word-wrap instead of overlapping, external API boxes (Last.fm,
+      MusicBrainz) crossing into the AWS box, dbt layer boxes color-grouped purple, Presentation
+      section (Postgres -> Metabase -> Dashboard), and an isolated dashed "External CI" box with no
+      connecting arrows (since GitHub Actions tests don't touch the real pipeline). Export gotcha:
+      default PNG export captured the whole oversized page (including empty space below the
+      content), not just the diagram — fixed by manually rubber-band-selecting just the diagram
+      content and exporting with "Selection Only" + high zoom. Wired into README, removed the
+      now-unused architecture.mmd Mermaid source file.
 - [ ] Demo script
 - [ ] Future-work note
 
 ### Session notes (free text — newest at top)
 
+- 2026-06-23: Phase 8 progressed significantly — README and architecture diagram both done.
+  Computer was fully off (not just asleep) at cron time — different failure mode than usual: local
+  Postgres itself wasn't running, with a stale postmaster.pid lock file left over from the unclean
+  shutdown (confirmed stale by checking the PID it referenced belonged to an unrelated process).
+  Removed the lock file, started Postgres via `brew services start postgresql@16`, confirmed no data
+  corruption (2400 rows intact), then ran the usual `run_daily_pipeline.sh` backfill — 24/24 tests,
+  now 9 days of data. Finished the README: fixed the stale project-status table, added a real
+  "How to run it" section (local-only quick start, no AWS needed), added the dashboard screenshot.
+  Built the architecture diagram — see Phase 8 checklist above for the full journey (Lucid AI ->
+  Mermaid -> draw.io with real AWS icons, built manually step by step with the user). Discussed
+  whether the project is "technically complete" — confirmed yes, all Phases 0-7 are done and
+  verified; only Phase 8's demo script and future-work note remain, which are presentation-prep
+  writing, not engineering work. Revisited the Terraform stretch-goal timing question now that the
+  user is ahead of their own July 1 checkpoint — recommended attempting it now, sequenced as:
+  future-work note (quick) -> Terraform -> demo script (written last, after Terraform's outcome is
+  known, so it accurately reflects what's actually being demoed). User also raised a good small
+  enhancement idea for later: a Metabase dashboard filter letting viewers pick a past date for KPI 1
+  and KPI 3 (currently both hardcoded to "today" only) — confirmed feasible as a native Metabase
+  feature (no new SQL/dbt needed for the 2 GUI-built KPIs; the 2 SQL-based KPIs would need a
+  {{date_filter}} template variable added if extended there too). Session ended before starting the
+  future-work note — that's the explicit next step. Next: future-work note, then Terraform
+  (terraform import against existing AWS resources), then the dashboard date-filter enhancement,
+  then the demo script last.
 - 2026-06-22: All 5 KPIs complete — Phase 7 dashboard-building (the charts themselves) is done. Backfilled
   today's data first (same cron-asleep pattern as the last 2 days; run_daily_pipeline.sh handled it
   cleanly, 24/24 tests, now 8 days of data). Finished KPI 5 (bar chart, color by direction, "show values
